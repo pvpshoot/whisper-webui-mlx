@@ -1,21 +1,17 @@
 # Worker Report
 
-Task: WUI-012 - Sequential worker + fake transcriber
+Task: WUI-020 - Integrate `wtm` CLI transcription
 
 What changed:
-- Added an atomic job-claim API plus status updates for queued/running/done/failed.
-- Implemented a single background worker and fake transcriber that writes deterministic TXT output.
-- Wired worker startup into app startup and added a sequential worker test.
-- Updated existing app tests to keep the worker disabled during upload checks.
-- Updated docs tree to reflect new modules/tests.
+- Added a WTM-backed transcriber that builds the CLI command with language/output dir and validates TXT output.
+- Switched the worker default transcriber to the WTM implementation.
+- Added a subprocess-mocked transcriber test to avoid running the real model.
+- Updated the project tree docs to include the new test file.
 
 Files changed:
-- mlx_ui/app.py
-- mlx_ui/db.py
 - mlx_ui/transcriber.py
 - mlx_ui/worker.py
-- tests/test_app.py
-- tests/test_worker.py
+- tests/test_transcriber.py
 - docs/tree.md
 
 Commands run:

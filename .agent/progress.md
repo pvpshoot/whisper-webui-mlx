@@ -22,3 +22,6 @@
 - 2026-01-21T11:57:01Z — PLANNER — CODEX_ITERATION=7 — selected WUI-012 (Sequential worker + fake transcriber). Queue updated (moved WUI-012 to Now).
 - 2026-01-21T12:03:50Z — WORKER — CODEX_ITERATION=7 — WUI-012 — tests: passed (make test); lint: passed (make lint)
 - 2026-01-21T12:08:25Z — JUDGE — CODEX_ITERATION=7 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
+- 2026-01-21T12:13:35Z — PLANNER — CODEX_ITERATION=8 — selected WUI-020 (Integrate `wtm` CLI transcription). Queue updated (moved WUI-020 to Now).
+- 2026-01-21T12:19:43Z — WORKER — CODEX_ITERATION=8 — WUI-020 — tests: passed (make test); lint: passed (make lint)
+- 2026-01-21T12:24:16Z — JUDGE — CODEX_ITERATION=8 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)

@@ -1809,4 +1809,343 @@ thinking
 
 The plan is to restage the log file just before committing to capture its latest state, accepting that it will likely be modified again immediately after commit due to ongoing appends; this residual dirty state will be noted in the final summary.
 exec
-/bin/zsh -lc 'git add .agent/logs/judge_7.err' in /Users/ivankhokhlov/code/mlx-ui
+/bin/zsh -lc 'git add .agent/logs/judge_7.err' in /Users/ivankhokhlov/code/mlx-ui succeeded in 100ms:
+
+file update:
+diff --git a/.agent/judge_feedback.md b/.agent/judge_feedback.md
+index 9f4afc22019455e202d611637228ba4056cdb9cd..edeee188669491702e9d3a27dc00c2e229489fb0
+--- a/.agent/judge_feedback.md
++++ b/.agent/judge_feedback.md
+@@ -3,4 +3,4 @@
+ Notes:
+ - `make test` passes (rerun).
+ - `make lint` not rerun; worker reported pass.
+-- Acceptance criteria met for WUI-011.
++- Acceptance criteria met for WUI-012.
+diff --git a/.agent/last_judge.txt b/.agent/last_judge.txt
+index 8d0fcdcd3491ebb105aa98912f37e4821d3d5a87..9563e8d51fa82e7375d5f0663fe5a51f9dbbb4d0
+--- a/.agent/last_judge.txt
++++ b/.agent/last_judge.txt
+@@ -1,10 +1,9 @@
+-- Verdict: PASS — WUI-011 acceptance met (SQLite persistence + History shows prior jobs).
++- Verdict: PASS — WUI-012 acceptance met (single worker runs sequentially with fake transcription output).
+ - Tests: `make test` passed (rerun).
+ - Lint: not rerun; worker reported `make lint` pass.
+-- Acceptance check: persisted jobs render on Queue/History after restart.
+-- State: updated `.agent/state.md` (last_task_id=WUI-011, failures=0).
+-- Queue: WUI-011 moved to Done; next task is WUI-012.
++- Acceptance check: worker claims queued jobs one-at-a-time and writes `data/results/<job_id>/result.txt`.
++- State: updated `.agent/state.md` (last_task_id=WUI-012, failures=0).
++- Queue: WUI-012 moved to Done; next task is WUI-020.
+ - Feedback: updated `.agent/judge_feedback.md`.
+-- Progress: appended `.agent/progress.md` (CODEX_ITERATION=6).
+-- Commit: `WUI-011: Persistent job store (SQLite)`.
+-- Repo status: dirty `.agent/logs/judge_6.err` (post-commit harness log).
+\ No newline at end of file
++- Progress: appended `.agent/progress.md` (CODEX_ITERATION=7).
++- Commit: `WUI-012: Sequential worker + fake transcriber`.
+diff --git a/.agent/progress.md b/.agent/progress.md
+index 7f25254cfcaf8d03da92dba1f6115c7bc921a0b4..b5b99d70d072840c44d12138801cd977180ba1ea
+--- a/.agent/progress.md
++++ b/.agent/progress.md
+@@ -21,3 +21,4 @@
+ - 2026-01-21T11:51:41Z — JUDGE — CODEX_ITERATION=6 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
+ - 2026-01-21T11:57:01Z — PLANNER — CODEX_ITERATION=7 — selected WUI-012 (Sequential worker + fake transcriber). Queue updated (moved WUI-012 to Now).
+ - 2026-01-21T12:03:50Z — WORKER — CODEX_ITERATION=7 — WUI-012 — tests: passed (make test); lint: passed (make lint)
++- 2026-01-21T12:08:25Z — JUDGE — CODEX_ITERATION=7 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
+diff --git a/.agent/queue.md b/.agent/queue.md
+index cc73f368fd7f99c8a9c90d587d4037a311cb91ae..c3cfb31b8359be397be957f61ad30daa27bf2046
+--- a/.agent/queue.md
++++ b/.agent/queue.md
+@@ -1,7 +1,6 @@
+ # Queue
+ 
+ ## Now
+-- [ ] WUI-012 — Sequential worker + fake transcriber (acceptance: single worker processes jobs strictly one-at-a-time; tests do not require ML model)
+ 
+ ## Next
+ 
+@@ -14,6 +13,7 @@
+ - [ ] WUI-090 — Live mode skeleton (acceptance: UI has “Live” page stub + technical plan in docs; no implementation yet)
+ 
+ ## Done
++- [x] WUI-012 — Sequential worker + fake transcriber (acceptance: single worker processes jobs strictly one-at-a-time; tests do not require ML model)
+ - [x] WUI-011 — Persistent job store (SQLite) (acceptance: jobs survive server restart; history page lists prior jobs)
+ - [x] WUI-010 — Upload endpoint + local storage (acceptance: user can upload multiple files; files saved under `data/uploads/` and jobs are created)
+ - [x] WUI-002 — Minimal WebUI shell (acceptance: localhost page renders with tabs: Queue + History, using server-side templates)
+diff --git a/.agent/state.md b/.agent/state.md
+index bc911151d8febdbf57cda031907b3f2072ad018b..4601330913812a1c8375a7683bb74615352e32ff
+--- a/.agent/state.md
++++ b/.agent/state.md
+@@ -1,3 +1,3 @@
+-last_task_id: WUI-011
++last_task_id: WUI-012
+ last_verdict: PASS
+ consecutive_failures: 0
+
+
+thinking
+**Committing changes**
+exec
+/bin/zsh -lc 'git commit -m "WUI-012: Sequential worker + fake transcriber"' in /Users/ivankhokhlov/code/mlx-ui succeeded in 96ms:
+[master 4729091] WUI-012: Sequential worker + fake transcriber
+ 26 files changed, 12457 insertions(+), 46 deletions(-)
+ create mode 100644 .agent/logs/judge_7.err
+ create mode 100644 .agent/logs/judge_7.out
+ create mode 100644 .agent/logs/lint_7.log
+ create mode 100644 .agent/logs/planner_7.err
+ create mode 100644 .agent/logs/planner_7.out
+ create mode 100644 .agent/logs/test_7.log
+ create mode 100644 .agent/logs/worker_7.err
+ create mode 100644 .agent/logs/worker_7.out
+ create mode 100644 mlx_ui/transcriber.py
+ create mode 100644 mlx_ui/worker.py
+ create mode 100644 tests/test_worker.py
+file update:
+diff --git a/.agent/judge_feedback.md b/.agent/judge_feedback.md
+index 9f4afc22019455e202d611637228ba4056cdb9cd..edeee188669491702e9d3a27dc00c2e229489fb0
+--- a/.agent/judge_feedback.md
++++ b/.agent/judge_feedback.md
+@@ -3,4 +3,4 @@
+ Notes:
+ - `make test` passes (rerun).
+ - `make lint` not rerun; worker reported pass.
+-- Acceptance criteria met for WUI-011.
++- Acceptance criteria met for WUI-012.
+diff --git a/.agent/last_judge.txt b/.agent/last_judge.txt
+index 8d0fcdcd3491ebb105aa98912f37e4821d3d5a87..9563e8d51fa82e7375d5f0663fe5a51f9dbbb4d0
+--- a/.agent/last_judge.txt
++++ b/.agent/last_judge.txt
+@@ -1,10 +1,9 @@
+-- Verdict: PASS — WUI-011 acceptance met (SQLite persistence + History shows prior jobs).
++- Verdict: PASS — WUI-012 acceptance met (single worker runs sequentially with fake transcription output).
+ - Tests: `make test` passed (rerun).
+ - Lint: not rerun; worker reported `make lint` pass.
+-- Acceptance check: persisted jobs render on Queue/History after restart.
+-- State: updated `.agent/state.md` (last_task_id=WUI-011, failures=0).
+-- Queue: WUI-011 moved to Done; next task is WUI-012.
++- Acceptance check: worker claims queued jobs one-at-a-time and writes `data/results/<job_id>/result.txt`.
++- State: updated `.agent/state.md` (last_task_id=WUI-012, failures=0).
++- Queue: WUI-012 moved to Done; next task is WUI-020.
+ - Feedback: updated `.agent/judge_feedback.md`.
+-- Progress: appended `.agent/progress.md` (CODEX_ITERATION=6).
+-- Commit: `WUI-011: Persistent job store (SQLite)`.
+-- Repo status: dirty `.agent/logs/judge_6.err` (post-commit harness log).
+\ No newline at end of file
++- Progress: appended `.agent/progress.md` (CODEX_ITERATION=7).
++- Commit: `WUI-012: Sequential worker + fake transcriber`.
+diff --git a/.agent/progress.md b/.agent/progress.md
+index 7f25254cfcaf8d03da92dba1f6115c7bc921a0b4..b5b99d70d072840c44d12138801cd977180ba1ea
+--- a/.agent/progress.md
++++ b/.agent/progress.md
+@@ -21,3 +21,4 @@
+ - 2026-01-21T11:51:41Z — JUDGE — CODEX_ITERATION=6 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
+ - 2026-01-21T11:57:01Z — PLANNER — CODEX_ITERATION=7 — selected WUI-012 (Sequential worker + fake transcriber). Queue updated (moved WUI-012 to Now).
+ - 2026-01-21T12:03:50Z — WORKER — CODEX_ITERATION=7 — WUI-012 — tests: passed (make test); lint: passed (make lint)
++- 2026-01-21T12:08:25Z — JUDGE — CODEX_ITERATION=7 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
+diff --git a/.agent/queue.md b/.agent/queue.md
+index cc73f368fd7f99c8a9c90d587d4037a311cb91ae..c3cfb31b8359be397be957f61ad30daa27bf2046
+--- a/.agent/queue.md
++++ b/.agent/queue.md
+@@ -1,7 +1,6 @@
+ # Queue
+ 
+ ## Now
+-- [ ] WUI-012 — Sequential worker + fake transcriber (acceptance: single worker processes jobs strictly one-at-a-time; tests do not require ML model)
+ 
+ ## Next
+ 
+@@ -14,6 +13,7 @@
+ - [ ] WUI-090 — Live mode skeleton (acceptance: UI has “Live” page stub + technical plan in docs; no implementation yet)
+ 
+ ## Done
++- [x] WUI-012 — Sequential worker + fake transcriber (acceptance: single worker processes jobs strictly one-at-a-time; tests do not require ML model)
+ - [x] WUI-011 — Persistent job store (SQLite) (acceptance: jobs survive server restart; history page lists prior jobs)
+ - [x] WUI-010 — Upload endpoint + local storage (acceptance: user can upload multiple files; files saved under `data/uploads/` and jobs are created)
+ - [x] WUI-002 — Minimal WebUI shell (acceptance: localhost page renders with tabs: Queue + History, using server-side templates)
+diff --git a/.agent/state.md b/.agent/state.md
+index bc911151d8febdbf57cda031907b3f2072ad018b..4601330913812a1c8375a7683bb74615352e32ff
+--- a/.agent/state.md
++++ b/.agent/state.md
+@@ -1,3 +1,3 @@
+-last_task_id: WUI-011
++last_task_id: WUI-012
+ last_verdict: PASS
+ consecutive_failures: 0
+
+
+thinking
+**Checking for remaining modifications**
+exec
+/bin/zsh -lc 'git status --porcelain' in /Users/ivankhokhlov/code/mlx-ui succeeded in 75ms:
+ M .agent/logs/judge_7.err
+?? data/
+file update:
+diff --git a/.agent/judge_feedback.md b/.agent/judge_feedback.md
+index 9f4afc22019455e202d611637228ba4056cdb9cd..edeee188669491702e9d3a27dc00c2e229489fb0
+--- a/.agent/judge_feedback.md
++++ b/.agent/judge_feedback.md
+@@ -3,4 +3,4 @@
+ Notes:
+ - `make test` passes (rerun).
+ - `make lint` not rerun; worker reported pass.
+-- Acceptance criteria met for WUI-011.
++- Acceptance criteria met for WUI-012.
+diff --git a/.agent/last_judge.txt b/.agent/last_judge.txt
+index 8d0fcdcd3491ebb105aa98912f37e4821d3d5a87..9563e8d51fa82e7375d5f0663fe5a51f9dbbb4d0
+--- a/.agent/last_judge.txt
++++ b/.agent/last_judge.txt
+@@ -1,10 +1,9 @@
+-- Verdict: PASS — WUI-011 acceptance met (SQLite persistence + History shows prior jobs).
++- Verdict: PASS — WUI-012 acceptance met (single worker runs sequentially with fake transcription output).
+ - Tests: `make test` passed (rerun).
+ - Lint: not rerun; worker reported `make lint` pass.
+-- Acceptance check: persisted jobs render on Queue/History after restart.
+-- State: updated `.agent/state.md` (last_task_id=WUI-011, failures=0).
+-- Queue: WUI-011 moved to Done; next task is WUI-012.
++- Acceptance check: worker claims queued jobs one-at-a-time and writes `data/results/<job_id>/result.txt`.
++- State: updated `.agent/state.md` (last_task_id=WUI-012, failures=0).
++- Queue: WUI-012 moved to Done; next task is WUI-020.
+ - Feedback: updated `.agent/judge_feedback.md`.
+-- Progress: appended `.agent/progress.md` (CODEX_ITERATION=6).
+-- Commit: `WUI-011: Persistent job store (SQLite)`.
+-- Repo status: dirty `.agent/logs/judge_6.err` (post-commit harness log).
+\ No newline at end of file
++- Progress: appended `.agent/progress.md` (CODEX_ITERATION=7).
++- Commit: `WUI-012: Sequential worker + fake transcriber`.
+diff --git a/.agent/progress.md b/.agent/progress.md
+index 7f25254cfcaf8d03da92dba1f6115c7bc921a0b4..b5b99d70d072840c44d12138801cd977180ba1ea
+--- a/.agent/progress.md
++++ b/.agent/progress.md
+@@ -21,3 +21,4 @@
+ - 2026-01-21T11:51:41Z — JUDGE — CODEX_ITERATION=6 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
+ - 2026-01-21T11:57:01Z — PLANNER — CODEX_ITERATION=7 — selected WUI-012 (Sequential worker + fake transcriber). Queue updated (moved WUI-012 to Now).
+ - 2026-01-21T12:03:50Z — WORKER — CODEX_ITERATION=7 — WUI-012 — tests: passed (make test); lint: passed (make lint)
++- 2026-01-21T12:08:25Z — JUDGE — CODEX_ITERATION=7 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
+diff --git a/.agent/queue.md b/.agent/queue.md
+index cc73f368fd7f99c8a9c90d587d4037a311cb91ae..c3cfb31b8359be397be957f61ad30daa27bf2046
+--- a/.agent/queue.md
++++ b/.agent/queue.md
+@@ -1,7 +1,6 @@
+ # Queue
+ 
+ ## Now
+-- [ ] WUI-012 — Sequential worker + fake transcriber (acceptance: single worker processes jobs strictly one-at-a-time; tests do not require ML model)
+ 
+ ## Next
+ 
+@@ -14,6 +13,7 @@
+ - [ ] WUI-090 — Live mode skeleton (acceptance: UI has “Live” page stub + technical plan in docs; no implementation yet)
+ 
+ ## Done
++- [x] WUI-012 — Sequential worker + fake transcriber (acceptance: single worker processes jobs strictly one-at-a-time; tests do not require ML model)
+ - [x] WUI-011 — Persistent job store (SQLite) (acceptance: jobs survive server restart; history page lists prior jobs)
+ - [x] WUI-010 — Upload endpoint + local storage (acceptance: user can upload multiple files; files saved under `data/uploads/` and jobs are created)
+ - [x] WUI-002 — Minimal WebUI shell (acceptance: localhost page renders with tabs: Queue + History, using server-side templates)
+diff --git a/.agent/state.md b/.agent/state.md
+index bc911151d8febdbf57cda031907b3f2072ad018b..4601330913812a1c8375a7683bb74615352e32ff
+--- a/.agent/state.md
++++ b/.agent/state.md
+@@ -1,3 +1,3 @@
+-last_task_id: WUI-011
++last_task_id: WUI-012
+ last_verdict: PASS
+ consecutive_failures: 0
+
+
+
+thinking
+**Confirming repo state and tests passing**
+
+The commit includes updates to the agent state, progress, queue, and judge feedback files, with leftover modifications only in .agent/logs/judge_7.err and untracked data/. Tests ran successfully after these updates, and no changes affect server binding or safety rules.
+thinking
+**Crafting detailed final summary bullets**
+
+Preparing a 12-line bullet list covering verdict (PASS), tests status (make test rerun passed), lint (not rerun, worker reported pass), acceptance criteria met (sequential worker + fake transcriber), updated state and queue (last task done, next task WUI-020), judge feedback and progress updated, commit made, repo status with modified log and untracked data/, and clear pointers to judge feedback and progress files.
+codex
+- Verdict: PASS — WUI-012 acceptance met (sequential worker + fake transcriber).
+- Tests: `make test` passed (rerun).
+- Lint: not rerun; worker reported `make lint` pass.
+- Acceptance check: sequential claim/update + `result.txt` produced under `data/results/<job_id>/`.
+- State updated: `.agent/state.md` (last_task_id=WUI-012, failures=0).
+- Queue updated: `.agent/queue.md` moved WUI-012 to Done; next task WUI-020.
+- Feedback written: `.agent/judge_feedback.md`.
+- Progress appended: `.agent/progress.md` (CODEX_ITERATION=7).
+- Commit: `WUI-012: Sequential worker + fake transcriber`.
+- Repo status: modified `.agent/logs/judge_7.err` (post-commit harness log).
+- Repo status: untracked `data/` (runtime directory).
+- Where to look: `.agent/judge_feedback.md` and `.agent/progress.md`.
+file update:
+diff --git a/.agent/judge_feedback.md b/.agent/judge_feedback.md
+index 9f4afc22019455e202d611637228ba4056cdb9cd..edeee188669491702e9d3a27dc00c2e229489fb0
+--- a/.agent/judge_feedback.md
++++ b/.agent/judge_feedback.md
+@@ -3,4 +3,4 @@
+ Notes:
+ - `make test` passes (rerun).
+ - `make lint` not rerun; worker reported pass.
+-- Acceptance criteria met for WUI-011.
++- Acceptance criteria met for WUI-012.
+diff --git a/.agent/last_judge.txt b/.agent/last_judge.txt
+index 8d0fcdcd3491ebb105aa98912f37e4821d3d5a87..9563e8d51fa82e7375d5f0663fe5a51f9dbbb4d0
+--- a/.agent/last_judge.txt
++++ b/.agent/last_judge.txt
+@@ -1,10 +1,9 @@
+-- Verdict: PASS — WUI-011 acceptance met (SQLite persistence + History shows prior jobs).
++- Verdict: PASS — WUI-012 acceptance met (single worker runs sequentially with fake transcription output).
+ - Tests: `make test` passed (rerun).
+ - Lint: not rerun; worker reported `make lint` pass.
+-- Acceptance check: persisted jobs render on Queue/History after restart.
+-- State: updated `.agent/state.md` (last_task_id=WUI-011, failures=0).
+-- Queue: WUI-011 moved to Done; next task is WUI-012.
++- Acceptance check: worker claims queued jobs one-at-a-time and writes `data/results/<job_id>/result.txt`.
++- State: updated `.agent/state.md` (last_task_id=WUI-012, failures=0).
++- Queue: WUI-012 moved to Done; next task is WUI-020.
+ - Feedback: updated `.agent/judge_feedback.md`.
+-- Progress: appended `.agent/progress.md` (CODEX_ITERATION=6).
+-- Commit: `WUI-011: Persistent job store (SQLite)`.
+-- Repo status: dirty `.agent/logs/judge_6.err` (post-commit harness log).
+\ No newline at end of file
++- Progress: appended `.agent/progress.md` (CODEX_ITERATION=7).
++- Commit: `WUI-012: Sequential worker + fake transcriber`.
+diff --git a/.agent/progress.md b/.agent/progress.md
+index 7f25254cfcaf8d03da92dba1f6115c7bc921a0b4..b5b99d70d072840c44d12138801cd977180ba1ea
+--- a/.agent/progress.md
++++ b/.agent/progress.md
+@@ -21,3 +21,4 @@
+ - 2026-01-21T11:51:41Z — JUDGE — CODEX_ITERATION=6 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
+ - 2026-01-21T11:57:01Z — PLANNER — CODEX_ITERATION=7 — selected WUI-012 (Sequential worker + fake transcriber). Queue updated (moved WUI-012 to Now).
+ - 2026-01-21T12:03:50Z — WORKER — CODEX_ITERATION=7 — WUI-012 — tests: passed (make test); lint: passed (make lint)
++- 2026-01-21T12:08:25Z — JUDGE — CODEX_ITERATION=7 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
+diff --git a/.agent/queue.md b/.agent/queue.md
+index cc73f368fd7f99c8a9c90d587d4037a311cb91ae..c3cfb31b8359be397be957f61ad30daa27bf2046
+--- a/.agent/queue.md
++++ b/.agent/queue.md
+@@ -1,7 +1,6 @@
+ # Queue
+ 
+ ## Now
+-- [ ] WUI-012 — Sequential worker + fake transcriber (acceptance: single worker processes jobs strictly one-at-a-time; tests do not require ML model)
+ 
+ ## Next
+ 
+@@ -14,6 +13,7 @@
+ - [ ] WUI-090 — Live mode skeleton (acceptance: UI has “Live” page stub + technical plan in docs; no implementation yet)
+ 
+ ## Done
++- [x] WUI-012 — Sequential worker + fake transcriber (acceptance: single worker processes jobs strictly one-at-a-time; tests do not require ML model)
+ - [x] WUI-011 — Persistent job store (SQLite) (acceptance: jobs survive server restart; history page lists prior jobs)
+ - [x] WUI-010 — Upload endpoint + local storage (acceptance: user can upload multiple files; files saved under `data/uploads/` and jobs are created)
+ - [x] WUI-002 — Minimal WebUI shell (acceptance: localhost page renders with tabs: Queue + History, using server-side templates)
+diff --git a/.agent/state.md b/.agent/state.md
+index bc911151d8febdbf57cda031907b3f2072ad018b..4601330913812a1c8375a7683bb74615352e32ff
+--- a/.agent/state.md
++++ b/.agent/state.md
+@@ -1,3 +1,3 @@
+-last_task_id: WUI-011
++last_task_id: WUI-012
+ last_verdict: PASS
+ consecutive_failures: 0
+
+tokens used
+65,245

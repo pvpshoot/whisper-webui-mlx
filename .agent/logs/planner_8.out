@@ -1,0 +1,3 @@
+Selected task: WUI-020 — Integrate `wtm` CLI transcription.
+Updated files: `.agent/queue.md`, `.agent/plan.md`, `.agent/progress.md`.
+Worker next: implement the `wtm`-backed transcriber per `.agent/plan.md`, update tests to mock subprocess, then run `make test` and `make lint`.

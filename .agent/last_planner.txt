@@ -1,5 +1,3 @@
-Selected task: WUI-012 — Sequential worker + fake transcriber.
-
+Selected task: WUI-020 — Integrate `wtm` CLI transcription.
 Updated files: `.agent/queue.md`, `.agent/plan.md`, `.agent/progress.md`.
-
-Worker next: implement the sequential worker + fake transcriber per `.agent/plan.md`, add tests that avoid the real ML model, and run `make test` + `make lint`.
+Worker next: implement the `wtm`-backed transcriber per `.agent/plan.md`, update tests to mock subprocess, then run `make test` and `make lint`.

@@ -1,9 +1,12 @@
-- Verdict: PASS — WUI-012 acceptance met (single worker runs sequentially with fake transcription output).
+- Verdict: PASS — WUI-020 acceptance met (wtm CLI transcriber with language + txt output).
 - Tests: `make test` passed (rerun).
 - Lint: not rerun; worker reported `make lint` pass.
-- Acceptance check: worker claims queued jobs one-at-a-time and writes `data/results/<job_id>/result.txt`.
-- State: updated `.agent/state.md` (last_task_id=WUI-012, failures=0).
-- Queue: WUI-012 moved to Done; next task is WUI-020.
-- Feedback: updated `.agent/judge_feedback.md`.
-- Progress: appended `.agent/progress.md` (CODEX_ITERATION=7).
-- Commit: `WUI-012: Sequential worker + fake transcriber`.
+- Acceptance check: `wtm` runs with `--language` and outputs `.txt` under `data/results/<job_id>/`.
+- State updated: `.agent/state.md` (last_task_id=WUI-020, failures=0).
+- Queue updated: `.agent/queue.md` moved WUI-020 to Done; next task WUI-021.
+- Feedback written: `.agent/judge_feedback.md`.
+- Progress appended: `.agent/progress.md` (CODEX_ITERATION=8).
+- Commit: `WUI-020: Integrate wtm CLI transcription`.
+- Repo status: modified `.agent/logs/judge_8.err` (post-commit harness log).
+- Repo status: untracked `data/` (runtime directory).
+- Where to look: `.agent/judge_feedback.md` and `.agent/progress.md`.

@@ -1,30 +1,27 @@
 # Plan
 
-Task: WUI-012 — Sequential worker + fake transcriber
-Acceptance: single worker processes jobs strictly one-at-a-time; tests do not require ML model
+Task: WUI-020 — Integrate `wtm` CLI transcription
+
+Acceptance: for a job, system runs `wtm` with chosen language and produces at least `.txt` in `data/results/<job_id>/`
 
 Assumptions:
-- A background loop can run in-process (thread or asyncio task) on app startup to poll queued jobs.
-- Fake transcriber can write a stub TXT result under `data/results/<job_id>/result.txt` without calling `wtm`.
+- `wtm` is installed and available on PATH (or a configurable path), and the model has been downloaded.
+- Tests should not invoke the real ML model; subprocess calls will be mocked.
 
 Implementation steps:
-- Add DB helpers to fetch the next queued job and update job status (queued/running/done/failed) atomically.
-- Implement a single worker loop that polls for queued jobs, marks one running, runs the fake transcriber, then marks done or failed.
-- Guard the worker with a single global lock or singleton to prevent concurrent execution.
-- Create a small fake transcriber module that writes a deterministic TXT result for each job.
-- Wire the worker startup into FastAPI startup so it begins processing uploads automatically.
-- Add tests that enqueue multiple jobs and assert they complete sequentially without parallel execution or real ML model calls.
-- Update `docs/tree.md` if new modules or data directories are added.
-- Record test/lint results in `.agent/worker_report.md`.
+- Inspect the current transcriber interface and worker flow to locate where to swap the fake transcriber for a CLI-backed implementation.
+- Implement a `wtm`-backed transcriber that builds the CLI command with the selected language and output directory, captures errors, and writes results under `data/results/<job_id>/`.
+- Ensure the worker uses the new transcriber path and records failures cleanly without breaking the queue.
+- Add configuration hooks if needed (e.g., optional `WTM_PATH`) and keep logs readable while avoiding secret exposure.
+- Update tests to mock subprocess execution, create a fake `.txt` result, and assert job status/result paths without running the model.
 
 Files likely to touch:
+- `mlx_ui/transcriber.py`
+- `mlx_ui/worker.py`
 - `mlx_ui/app.py`
-- `mlx_ui/db.py`
-- `mlx_ui/worker.py` (new)
-- `tests/test_worker.py` (new) or `tests/test_app.py`
-- `docs/tree.md`
-- `.agent/worker_report.md`
+- `tests/test_worker.py`
+- `tests/test_app.py`
 
-Verification:
+Verification steps:
 - `make test`
 - `make lint`
