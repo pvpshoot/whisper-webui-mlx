@@ -1,0 +1,3 @@
+Updated `Makefile` to run test/lint/fmt/run via Poetry so pytest/ruff come from the managed venv, bumped ruff to `^0.14.13` and regenerated `poetry.lock` for a solvable dev install, and updated `docs/dev.md` to the Poetry workflow.
+Tests: `make test` (pass), `make lint` (pass).
+Report/logs: `.agent/worker_report.md`, `.agent/logs/test_2.log`, `.agent/logs/lint_2.log`.

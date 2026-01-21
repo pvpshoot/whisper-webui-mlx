@@ -1,0 +1,7 @@
+Selected task: WUI-002 — Minimal WebUI shell.
+
+Updated files:
+- `.agent/plan.md`
+- `.agent/progress.md`
+
+Worker next: implement the Jinja2-rendered root page with Queue/History tabs, adjust `tests/test_app.py` for HTML response, update `docs/tree.md` if a templates directory is added, then run `make test` and `make lint` and record results in `.agent/worker_report.md`.

@@ -1,8 +1,7 @@
 # Queue
 
 ## Now
-- [ ] WUI-001 — Bootstrap repo skeleton (acceptance: `make test` passes with a minimal FastAPI app + 1–3 tests, and docs/agent harness files exist)
-- [ ] WUI-002 — Minimal WebUI shell (acceptance: localhost page renders with tabs: Queue + History, using server-side templates)
+
 
 ## Next
 - [ ] WUI-010 — Upload endpoint + local storage (acceptance: user can upload multiple files; files saved under `data/uploads/` and jobs are created)
@@ -18,3 +17,6 @@
 - [ ] WUI-090 — Live mode skeleton (acceptance: UI has “Live” page stub + technical plan in docs; no implementation yet)
 
 ## Done
+- [x] WUI-002 — Minimal WebUI shell (acceptance: localhost page renders with tabs: Queue + History, using server-side templates)
+- [x] WUI-001A — Fix pytest availability for `make test` (acceptance: `make test` succeeds in a clean env by ensuring pytest is installed or Makefile uses Poetry/venv)
+- [x] WUI-001 — Bootstrap repo skeleton (acceptance: `make test` passes with a minimal FastAPI app + 1–3 tests, and docs/agent harness files exist)

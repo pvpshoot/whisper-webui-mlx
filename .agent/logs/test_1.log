@@ -1,0 +1,3 @@
+python -m pytest
+/Users/ivankhokhlov/code/mlx-ui/.venv/bin/python: No module named pytest
+make: *** [test] Error 1

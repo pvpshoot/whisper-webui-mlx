@@ -4,7 +4,7 @@ PROJECT_NAME: "whisper-webui-mlx"
 REPO_KIND: "new repo"
 
 ## Brief (1–2 paragraphs)
-Build a **local macOS app for Apple Silicon (M1+)** that exposes a **Web UI on localhost** to manage **offline transcription** of audio/video files using the engine from `whisper-turbo-mlx` via its CLI `wtm` (MLX).
+Build a **local macOS app for Apple Silicon (M1+)** that exposes a **Web UI on localhost** to manage **offline transcription** of audio/video files using the engine from `whisper-turbo-mlx` via its CLI `wtm` (MLX). https://github.com/JosefAlbers/whisper-turbo-mlx
 
 Turn the current console workflow (e.g. `wtm ... --any_lang=True`) into a tool that is easy to deploy on another M1+ Mac with **one command**, supports **batch uploads**, a **strictly sequential** processing queue (no parallelism), **job history + downloads**, optional **Telegram delivery of TXT results**, and (in the final phase) **live recording + chunked transcription**.
 
@@ -25,7 +25,7 @@ RUN_CMD: "make run"
 ## Policies
 DO_NOT_TOUCH_OUTSIDE_REPO: true
 NETWORK_ALLOWED: "no"   # Implement “check updates” as best-effort and fully optional at runtime.
-AUTO_COMMIT: "no"
+AUTO_COMMIT: "yes"
 
 ## Budgets (soft)
 PLANNER_MAX_MINUTES: 2

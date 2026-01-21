@@ -1,0 +1,5 @@
+Selected task: WUI-001 — Bootstrap repo skeleton.
+
+Files updated: `.agent/plan.md`, `.agent/progress.md`.
+
+Worker next: implement the plan in `.agent/plan.md` (minimal FastAPI app + 1–3 tests, dependencies, Makefile targets, docs/tree.md update) and verify with `make test` and `make lint`.
