@@ -1,9 +1,5 @@
-Selected task: WUI-010 — Upload endpoint + local storage.
+Selected task: WUI-011 — Persistent job store (SQLite).
 
-Files updated:
-- `.agent/queue.md`
-- `.agent/plan.md`
-- `.agent/progress.md`
+Updated files: `.agent/queue.md`, `.agent/plan.md`, `.agent/progress.md`.
 
-Worker should next:
-- Implement the upload endpoint + local storage + in-memory job creation and update the Queue UI/tests per `.agent/plan.md`, then run `make test` and `make lint` and log results in `.agent/worker_report.md`.
+Worker next: implement the SQLite-backed job store per `.agent/plan.md`, update tests/UI to read persisted jobs, update `docs/tree.md` if new modules/paths are added, then run `make test` and `make lint` and record results in `.agent/worker_report.md`.

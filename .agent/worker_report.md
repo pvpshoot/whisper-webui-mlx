@@ -1,26 +1,25 @@
 # Worker Report
 
-Task: WUI-010 — Upload endpoint + local storage
+Task: WUI-011 — Persistent job store (SQLite)
 
 What changed:
-- Added uploads directory handling, an in-memory job store, and a multi-file upload endpoint.
-- Rendered the Queue tab with an upload form and queued job list.
-- Added upload tests to verify job creation and file persistence with cleanup.
-- Added python-multipart and documented the data directory in the tree map.
+- Added a SQLite-backed job store module and initialize it on app startup.
+- Swapped in-memory job tracking for DB reads/writes during uploads and page renders.
+- Rendered persisted jobs on both Queue and History tabs.
+- Updated tests to use temporary DB paths and verify persistence across a simulated restart.
+- Updated the repo tree map to include the new database module and storage path.
 
 Files changed:
+- mlx_ui/db.py
 - mlx_ui/app.py
 - mlx_ui/templates/index.html
 - tests/test_app.py
 - docs/tree.md
-- pyproject.toml
-- poetry.lock
 - .agent/worker_report.md
 - .agent/progress.md
-- .agent/logs/test_5.log
-- .agent/logs/lint_5.log
+- .agent/logs/test_6.log
+- .agent/logs/lint_6.log
 
 Commands run + result:
-- `poetry add python-multipart` (pass)
 - `make test` (pass)
 - `make lint` (pass)

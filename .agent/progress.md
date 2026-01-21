@@ -16,3 +16,6 @@
 - 2026-01-21T11:23:27Z — PLANNER — CODEX_ITERATION=5 — selected WUI-010 (Upload endpoint + local storage). Queue updated (moved WUI-010 to Now).
 - 2026-01-21T11:33:16Z — WORKER — CODEX_ITERATION=5 — WUI-010 — tests: passed (make test); lint: passed (make lint)
 - 2026-01-21T11:37:21Z — JUDGE — CODEX_ITERATION=5 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
+- 2026-01-21T11:41:40Z — PLANNER — CODEX_ITERATION=6 — selected WUI-011 (Persistent job store (SQLite)). Queue updated (moved WUI-011 to Now).
+- 2026-01-21T11:48:06Z — WORKER — CODEX_ITERATION=6 — WUI-011 — tests: passed (make test); lint: passed (make lint)
+- 2026-01-21T11:51:41Z — JUDGE — CODEX_ITERATION=6 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)

@@ -1,0 +1,2676 @@
+OpenAI Codex v0.87.0 (research preview)
+--------
+workdir: /Users/ivankhokhlov/code/mlx-ui/.
+model: gpt-5.2-codex
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: xhigh
+reasoning summaries: auto
+session id: 019be05c-9d91-76b0-bdcd-8cdd6a77973e
+--------
+user
+# WORKER AGENT (3-phase harness)
+
+You are the WORKER in a Planner→Worker→Judge pipeline.
+Your job: execute `.agent/plan.md` as written, with minimal scope creep.
+
+Non-interactive run (`codex exec`): do not ask questions. If unclear, make the smallest reasonable assumption and log it.
+
+## Stop conditions
+- If `.agent/STOP` exists: append “STOP seen” to `.agent/progress.md` and exit.
+- If `.agent/DONE` exists: append “DONE seen” to `.agent/progress.md` and exit.
+
+## Inputs you MUST read
+- `.agent/PROJECT.md` (authoritative; includes TEST_CMD/LINT_CMD)
+- `AGENTS.md` (repo rules)
+- `docs/spec.md`
+- `docs/dev.md` (if exists)
+- `.agent/plan.md`
+- `.agent/judge_feedback.md` (if present)
+- `.agent/queue.md`
+- `.agent/progress.md`
+- `.agent/state.md`
+
+## Core rules
+- Implement ONLY the single task in `.agent/plan.md`.
+- Do NOT mark tasks done in `.agent/queue.md` (Judge owns that).
+- Prefer small, coherent changes. No big refactors unless the task explicitly requires it.
+- All network-dependent logic must be best-effort with timeouts and exception handling.
+- Bind server to localhost only.
+- Queue must be strictly sequential: one job at a time; no parallel transcription runs.
+- Never print secrets. If you need to log config, mask tokens.
+
+## Logging
+Ensure `.agent/logs/` exists.
+Write/overwrite `.agent/worker_report.md` with:
+- task id/title
+- what changed (bullets)
+- files changed (list)
+- commands run + result (pass/fail)
+- if failure: include a short excerpt of the error and what you think is next
+
+Also append a WORKER entry to `.agent/progress.md` with:
+- timestamp
+- CODEX_ITERATION
+- task id
+- test + lint status summary
+
+## Verification (must do)
+Run TEST_CMD (from PROJECT.md). Capture output into a file.
+
+Tip: to preserve exit codes with tee:
+- use: `bash -lc "set -o pipefail; <TEST_CMD> 2>&1 | tee .agent/logs/test_${CODEX_ITERATION}.log"`
+
+If LINT_CMD is set and command exists, run similarly and capture output:
+- `.agent/logs/lint_${CODEX_ITERATION}.log`
+
+If tests fail and you cannot fix quickly:
+- write/update `.agent/BLOCKED.md` with exact errors + next steps
+- exit (do not thrash)
+
+## Output
+Print a short summary:
+- what you implemented
+- test status
+- pointers to worker_report + log files
+
+mcp startup: no servers
+
+thinking
+**Starting agent environment setup**
+exec
+/bin/zsh -lc ls in /Users/ivankhokhlov/code/mlx-ui succeeded in 66ms:
+AGENTS.md
+Makefile
+README.md
+docs
+mlx_ui
+poetry.lock
+pyproject.toml
+scripts
+tests
+
+thinking
+**Checking existence of .agent**
+exec
+/bin/zsh -lc 'ls .agent' in /Users/ivankhokhlov/code/mlx-ui succeeded in 95ms:
+BLOCKED.md
+PROJECT.md
+judge.md
+judge_feedback.md
+last_judge.txt
+last_planner.txt
+last_worker.txt
+logs
+plan.md
+planner.md
+progress.md
+queue.md
+state.md
+worker.md
+worker_report.md
+
+thinking
+**Checking for stop or done condition**
+exec
+/bin/zsh -lc 'ls .agent | rg -n "STOP|DONE"' in /Users/ivankhokhlov/code/mlx-ui exited 1 in 105ms:
+
+exec
+/bin/zsh -lc 'cat AGENTS.md' in /Users/ivankhokhlov/code/mlx-ui succeeded in 102ms:
+# AGENTS.md
+
+This repo is developed using an autonomous loop (Planner → Worker → Judge) driven by `codex exec`.
+Because each run starts with limited context, **durable state MUST be stored in `.agent/`**.
+
+## Source of truth
+- `.agent/PROJECT.md` — high-level constraints and commands
+- `docs/spec.md` — product requirements
+- `.agent/queue.md` — backlog (Judge marks tasks done)
+
+## How to run
+- Tests: `make test`
+- Lint: `make lint`
+- Format: `make fmt`
+- Run server: `make run`
+
+If Makefile does not exist yet, create it during bootstrap.
+
+## Safety / security rules
+- Never touch anything outside the repo root.
+
+thinking
+**Reviewing core documentation**
+
+I'm reading key project and development docs to gather foundational knowledge, assess current progress, and understand any feedback or queued tasks that inform next steps.
+exec
+/bin/zsh -lc 'cat .agent/PROJECT.md' in /Users/ivankhokhlov/code/mlx-ui succeeded in 100ms:
+# PROJECT (single source of truth for the harness)
+
+PROJECT_NAME: "whisper-webui-mlx"
+REPO_KIND: "new repo"
+
+## Brief (1–2 paragraphs)
+Build a **local macOS app for Apple Silicon (M1+)** that exposes a **Web UI on localhost** to manage **offline transcription** of audio/video files using the engine from `whisper-turbo-mlx` via its CLI `wtm` (MLX). https://github.com/JosefAlbers/whisper-turbo-mlx
+
+Turn the current console workflow (e.g. `wtm ... --any_lang=True`) into a tool that is easy to deploy on another M1+ Mac with **one command**, supports **batch uploads**, a **strictly sequential** processing queue (no parallelism), **job history + downloads**, optional **Telegram delivery of TXT results**, and (in the final phase) **live recording + chunked transcription**.
+
+## Primary stack
+Python 3.11+
+- Backend/Web: FastAPI + Uvicorn
+- Templates/UI: Jinja2 + minimal vanilla JS (no external CDNs; must work offline)
+- Storage: SQLite (jobs metadata) + local filesystem (uploads/results/logs)
+- Worker: a single sequential worker consuming a persistent queue
+- Transcription: subprocess call to `wtm` with explicit language selection
+
+## Commands (choose defaults if unknown)
+TEST_CMD: "make test"
+exec
+/bin/zsh -lc 'cat docs/spec.md' in /Users/ivankhokhlov/code/mlx-ui succeeded in 91ms:
+# Spec — whisper-webui-mlx
+
+## Goal
+Create a **local-only** tool for **macOS Apple Silicon (M1+)** that provides a **Web UI on localhost** to manage **local transcription** of audio/video files using the engine from `whisper-turbo-mlx` via its CLI `wtm` (MLX).
+
+The tool must be easy to deploy to another M1+ Mac (one command), and after the initial setup + model download it must work **fully offline**.
+
+## MVP: Batch file transcription via Web UI
+### UX
+- User opens Web UI (localhost).
+- User uploads **one or multiple files** (audio or video).
+- User selects the **language manually** (no auto-detect).
+- Files are placed into a **queue** and processed **strictly sequentially** (no parallel jobs).
+- UI has:
+  - Queue view: current job + pending jobs
+  - History view: completed jobs + access to results
+
+### Processing rules
+- One worker processes one job at a time (sequential).
+- Keep the ML model “warm” behavior in mind: avoid parallelism and avoid reinitialization churn.
+exec
+/bin/zsh -lc 'test -f docs/dev.md && cat docs/dev.md' in /Users/ivankhokhlov/code/mlx-ui succeeded in 91ms:
+# Developer guide
+
+## Requirements (target)
+- macOS Apple Silicon (M1+)
+- Python 3.11+
+- Homebrew (for system deps like ffmpeg)
+
+## Quick start (eventual)
+```bash
+./scripts/setup_and_run.sh
+```
+
+## Manual dev loop
+```bash
+poetry install --with dev
+
+make test
+make run
+```
+
+exec
+/bin/zsh -lc 'cat .agent/plan.md' in /Users/ivankhokhlov/code/mlx-ui succeeded in 87ms:
+# Plan
+
+Task: WUI-011 — Persistent job store (SQLite)
+Acceptance: jobs survive server restart; history page lists prior jobs
+
+Assumptions:
+- Use a single SQLite DB file under `data/` (for example `data/jobs.db`) with a lightweight table for jobs.
+- The existing Queue/History view can read from the same persisted store for now (no new UI fields required).
+
+Implementation steps:
+- Add a small SQLite-backed job store (schema + CRUD helpers) and initialize it on startup.
+- Replace in-memory `app.state.jobs` reads with DB queries ordered by creation time.
+- Update the upload handler to insert job rows into SQLite after writing files to disk.
+- Ensure the root page renders persisted jobs for both Queue and History views.
+- Update tests to use a temporary DB path and verify jobs persist across a simulated app restart.
+- Update `docs/tree.md` if new modules or data paths are added.
+- Record test/lint results in `.agent/worker_report.md`.
+
+Files likely to touch:
+- `mlx_ui/app.py`
+exec
+/bin/zsh -lc 'cat .agent/judge_feedback.md' in /Users/ivankhokhlov/code/mlx-ui succeeded in 114ms:
+PASS
+
+Notes:
+- `make test` passes (rerun).
+- `make lint` not rerun; worker reported pass.
+- Acceptance criteria met for WUI-010.
+exec
+/bin/zsh -lc 'cat .agent/queue.md' in /Users/ivankhokhlov/code/mlx-ui succeeded in 98ms:
+# Queue
+
+## Now
+- [ ] WUI-011 — Persistent job store (SQLite) (acceptance: jobs survive server restart; history page lists prior jobs)
+
+## Next
+- [ ] WUI-012 — Sequential worker + fake transcriber (acceptance: single worker processes jobs strictly one-at-a-time; tests do not require ML model)
+
+## Later
+- [ ] WUI-020 — Integrate `wtm` CLI transcription (acceptance: for a job, system runs `wtm` with chosen language and produces at least `.txt` in `data/results/<job_id>/`)
+- [ ] WUI-021 — Results browsing + download (acceptance: history page shows per-job links to view/download TXT and other generated formats)
+- [ ] WUI-030 — One-command setup & run on M1+ macOS (acceptance: `./scripts/setup_and_run.sh` installs deps, downloads models, starts server, and opens browser)
+- [ ] WUI-040 — Telegram delivery (acceptance: when env vars are set, send TXT + message; failures do not break pipeline; secrets masked)
+- [ ] WUI-050 — Update check at startup (acceptance: if online, checks for updates with timeout; if offline, no errors and app works)
+- [ ] WUI-090 — Live mode skeleton (acceptance: UI has “Live” page stub + technical plan in docs; no implementation yet)
+
+## Done
+- [x] WUI-010 — Upload endpoint + local storage (acceptance: user can upload multiple files; files saved under `data/uploads/` and jobs are created)
+- [x] WUI-002 — Minimal WebUI shell (acceptance: localhost page renders with tabs: Queue + History, using server-side templates)
+- [x] WUI-001A — Fix pytest availability for `make test` (acceptance: `make test` succeeds in a clean env by ensuring pytest is installed or Makefile uses Poetry/venv)
+exec
+/bin/zsh -lc 'cat .agent/progress.md' in /Users/ivankhokhlov/code/mlx-ui succeeded in 92ms:
+# Progress Log (append-only)
+
+- 2026-01-21T09:49:08 — INIT — Harness files created. Next: run the 3-phase loop.
+- 2026-01-21T10:33:08Z — PLANNER — CODEX_ITERATION=1 — selected WUI-001 (Bootstrap repo skeleton). Queue unchanged.
+- 2026-01-21T10:37:23Z — WORKER — CODEX_ITERATION=1 — WUI-001 — tests: failed (pytest missing); lint: not run
+- 2026-01-21T10:39:53Z — JUDGE — CODEX_ITERATION=1 — NEEDS_WORK — make test failed (pytest missing in venv); tests: failed (make test)
+- 2026-01-21T10:42:24Z — PLANNER — CODEX_ITERATION=2 — selected WUI-001A (Fix pytest availability for `make test`). Queue updated (format fix for WUI-001A).
+- 2026-01-21T10:49:11Z — WORKER — CODEX_ITERATION=2 — WUI-001A — tests: passed (make test); lint: passed (make lint)
+- 2026-01-21T10:52:47Z — JUDGE — CODEX_ITERATION=2 — PASS — acceptance met; tests: passed (make test); lint: passed (make lint)
+- 2026-01-21T10:56:28Z — PLANNER — CODEX_ITERATION=3 — selected WUI-001 (Bootstrap repo skeleton). Queue unchanged.
+- 2026-01-21T10:58:25Z — WORKER — CODEX_ITERATION=3 — WUI-001 — tests: passed (make test); lint: passed (make lint)
+- 2026-01-21T11:01:51Z — JUDGE — CODEX_ITERATION=3 — PASS — acceptance met; tests: passed (make test); lint: passed (make lint)
+- 2026-01-21T11:05:17Z — PLANNER — CODEX_ITERATION=4 — selected WUI-002 (Minimal WebUI shell). Queue unchanged.
+- 2026-01-21T11:11:48Z — WORKER — CODEX_ITERATION=4 — WUI-002 — tests: passed (make test); lint: passed (make lint)
+- 2026-01-21T11:16:13Z — JUDGE — CODEX_ITERATION=4 — PASS — acceptance met; tests: passed (make test); lint: passed (make lint)
+- 2026-01-21T11:23:27Z — PLANNER — CODEX_ITERATION=5 — selected WUI-010 (Upload endpoint + local storage). Queue updated (moved WUI-010 to Now).
+- 2026-01-21T11:33:16Z — WORKER — CODEX_ITERATION=5 — WUI-010 — tests: passed (make test); lint: passed (make lint)
+- 2026-01-21T11:37:21Z — JUDGE — CODEX_ITERATION=5 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
+- 2026-01-21T11:41:40Z — PLANNER — CODEX_ITERATION=6 — selected WUI-011 (Persistent job store (SQLite)). Queue updated (moved WUI-011 to Now).
+exec
+/bin/zsh -lc 'cat .agent/state.md' in /Users/ivankhokhlov/code/mlx-ui succeeded in 102ms:
+last_task_id: WUI-010
+last_verdict: PASS
+consecutive_failures: 0
+
+thinking
+**Checking repo structure**
+
+I'm inspecting the repository layout and contents to confirm where and how to implement the persistent job store strictly within the repo root.
+exec
+/bin/zsh -lc 'rg --files' in /Users/ivankhokhlov/code/mlx-ui succeeded in 109ms:
+AGENTS.md
+poetry.lock
+scripts/status.sh
+scripts/codex_loop_3phase.sh
+README.md
+docs/spec.md
+docs/tree.md
+docs/dev.md
+tests/test_app.py
+tests/__init__.py
+pyproject.toml
+mlx_ui/templates/index.html
+mlx_ui/app.py
+mlx_ui/__init__.py
+Makefile
+
+thinking
+**Planning file inspection**
+exec
+/bin/zsh -lc "sed -n '1,220p' mlx_ui/app.py" in /Users/ivankhokhlov/code/mlx-ui succeeded in 88ms:
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+import shutil
+from uuid import uuid4
+
+from fastapi import FastAPI, File, Request, UploadFile
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+
+app = FastAPI(title="Whisper WebUI (MLX)")
+templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+BASE_DIR = Path(__file__).resolve().parent.parent
+DEFAULT_UPLOADS_DIR = BASE_DIR / "data" / "uploads"
+app.state.uploads_dir = DEFAULT_UPLOADS_DIR
+app.state.jobs = []
+
+
+@dataclass
+class JobRecord:
+exec
+/bin/zsh -lc "sed -n '1,220p' tests/test_app.py" in /Users/ivankhokhlov/code/mlx-ui succeeded in 91ms:
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+
+from mlx_ui.app import app
+
+client = TestClient(app)
+
+
+def test_root_ok() -> None:
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "Queue" in response.text
+    assert "History" in response.text
+
+
+def _cleanup_job_artifacts(jobs: list) -> None:
+    for job in jobs:
+exec
+/bin/zsh -lc "sed -n '1,220p' mlx_ui/templates/index.html" in /Users/ivankhokhlov/code/mlx-ui succeeded in 92ms:
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Whisper WebUI (MLX)</title>
+    <style>
+      :root {
+        --ink: #1d1b16;
+        --ink-muted: #5d5d5d;
+        --panel: #fff7ee;
+        --accent: #d46a3e;
+        --accent-strong: #8b3f1f;
+        --shadow: 0 24px 60px rgba(29, 27, 22, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+exec
+/bin/zsh -lc 'cat docs/tree.md' in /Users/ivankhokhlov/code/mlx-ui succeeded in 82ms:
+# Project tree (curated)
+
+This file is a human-maintained map of the repo. Update when structure changes.
+
+## Current (bootstrap)
+- `.agent/` — durable loop state + prompts
+- `data/` — runtime uploads/results/logs (created on demand)
+- `docs/` — spec + dev notes + this tree map
+- `mlx_ui/` — FastAPI app package (see `app.py`)
+- `mlx_ui/templates/` — Jinja2 templates
+- `scripts/` — loop scripts + setup/run scripts (to be implemented)
+- `tests/` — pytest suite
+- `Makefile` — dev commands
+- `pyproject.toml` — dependencies and tooling
+- `README.md` — repo overview
+exec
+/bin/zsh -lc "sed -n '220,520p' mlx_ui/templates/index.html" in /Users/ivankhokhlov/code/mlx-ui succeeded in 89ms:
+        padding-top: 16px;
+        border-top: 1px dashed #e3d2c1;
+        display: grid;
+        gap: 10px;
+      }
+
+      .placeholder-row {
+        padding: 12px 14px;
+        border-radius: 10px;
+        background: #fff;
+        border: 1px solid #f4e6d8;
+        color: var(--ink-muted);
+      }
+
+      @media (max-width: 720px) {
+        main {
+          padding: 32px 18px 48px;
+        }
+
+        .hero {
+
+thinking
+**Planning database integration**
+
+I'm adding a SQLite store module for job persistence without changing UI fields and updating tests to use a temporary DB path and confirm persistence across restarts. I'll check package structure to place the new module properly and handle multiple file edits with sequential apply_patch calls.
+exec
+/bin/zsh -lc 'cat mlx_ui/__init__.py' in /Users/ivankhokhlov/code/mlx-ui succeeded in 95ms:
+
+
+thinking
+**Verifying SQLite dependency absence**
+
+I confirmed SQLite is part of Python's standard library, so no explicit dependency is needed in pyproject.
+exec
+/bin/zsh -lc 'cat pyproject.toml' in /Users/ivankhokhlov/code/mlx-ui succeeded in 89ms:
+[tool.poetry]
+name = "mlx-ui"
+version = "0.1.0"
+description = ""
+authors = ["Ivan Khokhlov <ivan.s.khokhlov@rt.ru>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.115.6"
+jinja2 = "^3.1.4"
+uvicorn = "^0.32.1"
+python-multipart = "^0.0.21"
+
+[tool.poetry.group.dev.dependencies]
+httpx = "^0.28.1"
+pytest = "^8.3.4"
+ruff = "^0.14.13"
+
+
+
+
+
+thinking
+**Planning SQLite integration**
+
+Planning to add a new database module using sqlite3 under mlx_ui/db.py for CRUD operations, replacing in-memory job storage with a jobs.db file inside the existing data directory under the repo root. Also preparing to update app.state to hold the DB path and ensure the data directory exists, plus updating docs/tree.md for the new module and data file path.
+thinking
+**Designing SQLite DB module and app integration**
+
+Planning a new `mlx_ui/db.py` with JobRecord dataclass, SQLite schema, and CRUD functions for job persistence, plus initializing the DB on app startup and replacing in-memory job storage with DB queries in routes. Also preparing to refactor app state to hold configurable DB path, update tests to create temporary DBs, and adjust test setup to delay TestClient creation until after state config to ensure proper startup initialization and simulate app restarts.
+thinking
+**Adding tests for job persistence and updating docs**
+
+Planning new tests to verify uploaded jobs appear on the root page and persist across simulated restarts, alongside updating docs/tree and .agent logs accordingly. Also considering auto-commit behavior but awaiting confirmation before committing changes.
+exec
+/bin/zsh -lc 'cat .agent/worker_report.md' in /Users/ivankhokhlov/code/mlx-ui succeeded in 98ms:
+# Worker Report
+
+Task: WUI-010 — Upload endpoint + local storage
+
+What changed:
+- Added uploads directory handling, an in-memory job store, and a multi-file upload endpoint.
+- Rendered the Queue tab with an upload form and queued job list.
+- Added upload tests to verify job creation and file persistence with cleanup.
+- Added python-multipart and documented the data directory in the tree map.
+
+Files changed:
+- mlx_ui/app.py
+- mlx_ui/templates/index.html
+- tests/test_app.py
+- docs/tree.md
+- pyproject.toml
+- poetry.lock
+- .agent/worker_report.md
+- .agent/progress.md
+- .agent/logs/test_5.log
+
+
+
+thinking
+**Skipping auto commit and planning DB module**
+
+They won't auto-commit, so I'll ignore that and focus on updating the worker report markdown after finishing. Next, I'll start designing the database module.
+thinking
+**Designing SQLite DB module and app integration**
+
+Outlined a SQLite-based jobs table with dataclass mapping and CRUD functions in a new DB module. Planned to move job state from in-memory to DB, update app startup to initialize DB, and revise routes to query jobs from DB. Mapped out test adaptations using temporary DB paths and leveraging TestClient to simulate app restarts for persistence verification. Also considered restructuring app to support multiple instances but will keep global app and use request-bound app state for DB path to simplify integration.
+thinking
+**Planning full integration of DB with app, tests, templates, and docs**
+
+Decided on adding DB initialization at startup, updating routes to use DB for jobs, revising tests to use tmp paths and verify persistence across simulated restarts, enhancing the history section in templates to show jobs, and updating docs/tree.md to include the new DB module and jobs.db file. Implementation will begin with the DB module creation.
+exec
+/bin/zsh -lc "cat <<'EOF' > mlx_ui/db.py
+from dataclasses import dataclass
+from pathlib import Path
+import sqlite3
+
+
+@dataclass
+class JobRecord:
+    id: str
+    filename: str
+    status: str
+    created_at: str
+    upload_path: str
+
+
+SCHEMA = \"\"\"
+CREATE TABLE IF NOT EXISTS jobs (
+    id TEXT PRIMARY KEY,
+    filename TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    upload_path TEXT NOT NULL
+);
+\"\"\"
+
+
+def _connect(db_path: Path) -> sqlite3.Connection:
+    connection = sqlite3.connect(db_path)
+    connection.row_factory = sqlite3.Row
+    return connection
+
+
+def init_db(db_path: Path) -> None:
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    with _connect(db_path) as connection:
+        connection.execute(SCHEMA)
+        connection.commit()
+
+
+def insert_job(db_path: Path, job: JobRecord) -> None:
+    with _connect(db_path) as connection:
+        connection.execute(
+            \"\"\"
+            INSERT INTO jobs (id, filename, status, created_at, upload_path)
+            VALUES (?, ?, ?, ?, ?)
+            \"\"\",
+            (job.id, job.filename, job.status, job.created_at, job.upload_path),
+        )
+        connection.commit()
+
+
+def list_jobs(db_path: Path) -> list[JobRecord]:
+    with _connect(db_path) as connection:
+        rows = connection.execute(
+            \"\"\"
+            SELECT id, filename, status, created_at, upload_path
+            FROM jobs
+            ORDER BY created_at ASC
+            \"\"\"
+        ).fetchall()
+
+    return [JobRecord(**dict(row)) for row in rows]
+EOF" in /Users/ivankhokhlov/code/mlx-ui succeeded in 91ms:
+
+
+thinking
+**Drafting patch for app.py updates**
+
+I'm preparing to remove the dataclass import and JobRecord class, add imports from the db module, introduce a default DB path and app state for it, implement a startup event to initialize the DB, and update job listing and upload handling to use the database instead of the in-memory jobs list.
+file update
+M /Users/ivankhokhlov/code/mlx-ui/./mlx_ui/app.py
+@@ -1,2 +1 @@
+-from dataclasses import dataclass
+ from datetime import datetime, timezone
+@@ -10,2 +9,4 @@
+ 
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
++
+ app = FastAPI(title="Whisper WebUI (MLX)")
+@@ -14,13 +15,10 @@
+ DEFAULT_UPLOADS_DIR = BASE_DIR / "data" / "uploads"
++DEFAULT_DB_PATH = BASE_DIR / "data" / "jobs.db"
+ app.state.uploads_dir = DEFAULT_UPLOADS_DIR
+-app.state.jobs = []
++app.state.db_path = DEFAULT_DB_PATH
+ 
+ 
+-@dataclass
+-class JobRecord:
+-    id: str
+-    filename: str
+-    status: str
+-    created_at: str
+-    upload_path: str
++@app.on_event("startup")
++def startup() -> None:
++    init_db(get_db_path())
+ 
+@@ -28,3 +26,7 @@
+ def get_job_store() -> list[JobRecord]:
+-    return app.state.jobs
++    return list_jobs(get_db_path())
++
++
++def get_db_path() -> Path:
++    return Path(app.state.db_path)
+ 
+@@ -67,4 +69,4 @@
+ async def upload_files(request: Request, files: list[UploadFile] = File(...)):
+-    jobs = get_job_store()
+     uploads_dir = ensure_uploads_dir()
++    db_path = get_db_path()
+ 
+@@ -83,3 +85,5 @@
+             await upload.close()
+-        jobs.append(new_job_record(job_id, safe_name, destination))
++        insert_job(db_path, new_job_record(job_id, safe_name, destination))
++
++    jobs = list_jobs(db_path)
+ 
+apply_patch(auto_approved=true) exited 0 in 24ms:
+Success. Updated the following files:
+M mlx_ui/app.py
+file update:
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index 7e8e0380aa181cdc4704f5a08306c8c1013566e3..d2f6b05031a3edb4f5771e255f9f2f823a603e59
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -1,4 +1,3 @@
+-from dataclasses import dataclass
+ from datetime import datetime, timezone
+ from pathlib import Path
+ import shutil
+@@ -8,25 +7,28 @@
+ from fastapi.responses import HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
++
+ app = FastAPI(title="Whisper WebUI (MLX)")
+ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+ BASE_DIR = Path(__file__).resolve().parent.parent
+ DEFAULT_UPLOADS_DIR = BASE_DIR / "data" / "uploads"
++DEFAULT_DB_PATH = BASE_DIR / "data" / "jobs.db"
+ app.state.uploads_dir = DEFAULT_UPLOADS_DIR
+-app.state.jobs = []
++app.state.db_path = DEFAULT_DB_PATH
+ 
+ 
+-@dataclass
+-class JobRecord:
+-    id: str
+-    filename: str
+-    status: str
+-    created_at: str
+-    upload_path: str
++@app.on_event("startup")
++def startup() -> None:
++    init_db(get_db_path())
+ 
+ 
+ def get_job_store() -> list[JobRecord]:
+-    return app.state.jobs
++    return list_jobs(get_db_path())
++
++
++def get_db_path() -> Path:
++    return Path(app.state.db_path)
+ 
+ 
+ def get_uploads_dir() -> Path:
+@@ -65,8 +67,8 @@
+ 
+ @app.post("/upload", response_class=HTMLResponse)
+ async def upload_files(request: Request, files: list[UploadFile] = File(...)):
+-    jobs = get_job_store()
+     uploads_dir = ensure_uploads_dir()
++    db_path = get_db_path()
+ 
+     for upload in files:
+         if not upload.filename:
+@@ -81,7 +83,9 @@
+                 shutil.copyfileobj(upload.file, outfile)
+         finally:
+             await upload.close()
+-        jobs.append(new_job_record(job_id, safe_name, destination))
++        insert_job(db_path, new_job_record(job_id, safe_name, destination))
++
++    jobs = list_jobs(db_path)
+ 
+     return templates.TemplateResponse(
+         request,
+
+file update:
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index 7e8e0380aa181cdc4704f5a08306c8c1013566e3..d2f6b05031a3edb4f5771e255f9f2f823a603e59
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -1,4 +1,3 @@
+-from dataclasses import dataclass
+ from datetime import datetime, timezone
+ from pathlib import Path
+ import shutil
+@@ -8,25 +7,28 @@
+ from fastapi.responses import HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
++
+ app = FastAPI(title="Whisper WebUI (MLX)")
+ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+ BASE_DIR = Path(__file__).resolve().parent.parent
+ DEFAULT_UPLOADS_DIR = BASE_DIR / "data" / "uploads"
++DEFAULT_DB_PATH = BASE_DIR / "data" / "jobs.db"
+ app.state.uploads_dir = DEFAULT_UPLOADS_DIR
+-app.state.jobs = []
++app.state.db_path = DEFAULT_DB_PATH
+ 
+ 
+-@dataclass
+-class JobRecord:
+-    id: str
+-    filename: str
+-    status: str
+-    created_at: str
+-    upload_path: str
++@app.on_event("startup")
++def startup() -> None:
++    init_db(get_db_path())
+ 
+ 
+ def get_job_store() -> list[JobRecord]:
+-    return app.state.jobs
++    return list_jobs(get_db_path())
++
++
++def get_db_path() -> Path:
++    return Path(app.state.db_path)
+ 
+ 
+ def get_uploads_dir() -> Path:
+@@ -65,8 +67,8 @@
+ 
+ @app.post("/upload", response_class=HTMLResponse)
+ async def upload_files(request: Request, files: list[UploadFile] = File(...)):
+-    jobs = get_job_store()
+     uploads_dir = ensure_uploads_dir()
++    db_path = get_db_path()
+ 
+     for upload in files:
+         if not upload.filename:
+@@ -81,7 +83,9 @@
+                 shutil.copyfileobj(upload.file, outfile)
+         finally:
+             await upload.close()
+-        jobs.append(new_job_record(job_id, safe_name, destination))
++        insert_job(db_path, new_job_record(job_id, safe_name, destination))
++
++    jobs = list_jobs(db_path)
+ 
+     return templates.TemplateResponse(
+         request,
+
+
+
+thinking
+**Verifying function definition order and test setup**
+
+Confirmed that using functions before their definitions is valid due to Python's import-time execution and that startup depends on functions defined later is safe. Highlighted the need to ensure database initialization runs before any job store access, so tests must use the proper startup context to avoid failures. Planning to update tests/test_app.py to remove globals and enforce correct initialization via a patch.
+thinking
+**Simplifying tests by rewriting entire test file**
+
+Decided to replace the whole test file with a clean version using direct file overwrite to avoid patch complexity. Added setup to configure app state per test and enhanced the persistence test by asserting job count after restart to verify database durability.
+exec
+/bin/zsh -lc "cat <<'EOF' > tests/test_app.py
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+
+from mlx_ui.app import app
+from mlx_ui.db import list_jobs
+
+
+def _configure_app(tmp_path: Path) -> None:
+    app.state.uploads_dir = tmp_path / \"uploads\"
+    app.state.db_path = tmp_path / \"jobs.db\"
+
+
+def test_root_ok(tmp_path: Path) -> None:
+    _configure_app(tmp_path)
+    with TestClient(app) as client:
+        response = client.get(\"/\")
+
+    assert response.status_code == 200
+    assert response.headers[\"content-type\"].startswith(\"text/html\")
+    assert \"Queue\" in response.text
+    assert \"History\" in response.text
+
+
+def test_upload_multiple_files_creates_jobs_and_files(tmp_path: Path) -> None:
+    _configure_app(tmp_path)
+    files = [
+        (\"files\", (\"alpha.txt\", b\"one\", \"text/plain\")),
+        (\"files\", (\"beta.txt\", b\"two\", \"text/plain\")),
+    ]
+
+    with TestClient(app) as client:
+        response = client.post(\"/upload\", files=files)
+
+    assert response.status_code == 200
+    jobs = list_jobs(Path(app.state.db_path))
+    assert len(jobs) == 2
+    uploads_dir = Path(app.state.uploads_dir)
+    for job in jobs:
+        job_path = Path(job.upload_path)
+        assert job_path.is_file()
+        assert job_path.name == job.filename
+        assert job_path.parent.name == job.id
+        assert job_path.is_relative_to(uploads_dir)
+        assert job.status == \"queued\"
+
+
+def test_jobs_persist_across_restart(tmp_path: Path) -> None:
+    _configure_app(tmp_path)
+    files = [(\"files\", (\"alpha.txt\", b\"one\", \"text/plain\"))]
+
+    with TestClient(app) as client:
+        response = client.post(\"/upload\", files=files)
+
+    assert response.status_code == 200
+    with TestClient(app) as client:
+        response = client.get(\"/\")
+
+    assert response.status_code == 200
+    jobs = list_jobs(Path(app.state.db_path))
+    assert len(jobs) == 1
+    assert \"alpha.txt\" in response.text
+EOF" in /Users/ivankhokhlov/code/mlx-ui succeeded in 95ms:
+
+file update:
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index 7e8e0380aa181cdc4704f5a08306c8c1013566e3..d2f6b05031a3edb4f5771e255f9f2f823a603e59
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -1,4 +1,3 @@
+-from dataclasses import dataclass
+ from datetime import datetime, timezone
+ from pathlib import Path
+ import shutil
+@@ -8,25 +7,28 @@
+ from fastapi.responses import HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
++
+ app = FastAPI(title="Whisper WebUI (MLX)")
+ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+ BASE_DIR = Path(__file__).resolve().parent.parent
+ DEFAULT_UPLOADS_DIR = BASE_DIR / "data" / "uploads"
++DEFAULT_DB_PATH = BASE_DIR / "data" / "jobs.db"
+ app.state.uploads_dir = DEFAULT_UPLOADS_DIR
+-app.state.jobs = []
++app.state.db_path = DEFAULT_DB_PATH
+ 
+ 
+-@dataclass
+-class JobRecord:
+-    id: str
+-    filename: str
+-    status: str
+-    created_at: str
+-    upload_path: str
++@app.on_event("startup")
++def startup() -> None:
++    init_db(get_db_path())
+ 
+ 
+ def get_job_store() -> list[JobRecord]:
+-    return app.state.jobs
++    return list_jobs(get_db_path())
++
++
++def get_db_path() -> Path:
++    return Path(app.state.db_path)
+ 
+ 
+ def get_uploads_dir() -> Path:
+@@ -65,8 +67,8 @@
+ 
+ @app.post("/upload", response_class=HTMLResponse)
+ async def upload_files(request: Request, files: list[UploadFile] = File(...)):
+-    jobs = get_job_store()
+     uploads_dir = ensure_uploads_dir()
++    db_path = get_db_path()
+ 
+     for upload in files:
+         if not upload.filename:
+@@ -81,7 +83,9 @@
+                 shutil.copyfileobj(upload.file, outfile)
+         finally:
+             await upload.close()
+-        jobs.append(new_job_record(job_id, safe_name, destination))
++        insert_job(db_path, new_job_record(job_id, safe_name, destination))
++
++    jobs = list_jobs(db_path)
+ 
+     return templates.TemplateResponse(
+         request,
+
+
+thinking
+**Updating history section in index.html**
+
+I'm preparing a patch to replace the history placeholder with a conditional block that displays job history, then applying it.
+file update
+M /Users/ivankhokhlov/code/mlx-ui/./mlx_ui/templates/index.html
+@@ -358,6 +358,20 @@
+             <p>Completed jobs will appear here with download links.</p>
+-            <div class="placeholder">
+-              <div class="placeholder-row">No completed jobs yet.</div>
+-              <div class="placeholder-row">Check back after a run.</div>
+-            </div>
++            {% if jobs %}
++              <div class="job-list" aria-live="polite">
++                {% for job in jobs %}
++                  <div class="job-row">
++                    <div>
++                      <div class="job-name">{{ job.filename }}</div>
++                      <div class="job-meta">Added {{ job.created_at }}</div>
++                    </div>
++                    <div class="job-status">{{ job.status }}</div>
++                  </div>
++                {% endfor %}
++              </div>
++            {% else %}
++              <div class="placeholder">
++                <div class="placeholder-row">No completed jobs yet.</div>
++                <div class="placeholder-row">Check back after a run.</div>
++              </div>
++            {% endif %}
+           </section>
+apply_patch(auto_approved=true) exited 0 in 19ms:
+Success. Updated the following files:
+M mlx_ui/templates/index.html
+file update:
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index 7e8e0380aa181cdc4704f5a08306c8c1013566e3..d2f6b05031a3edb4f5771e255f9f2f823a603e59
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -1,4 +1,3 @@
+-from dataclasses import dataclass
+ from datetime import datetime, timezone
+ from pathlib import Path
+ import shutil
+@@ -8,25 +7,28 @@
+ from fastapi.responses import HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
++
+ app = FastAPI(title="Whisper WebUI (MLX)")
+ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+ BASE_DIR = Path(__file__).resolve().parent.parent
+ DEFAULT_UPLOADS_DIR = BASE_DIR / "data" / "uploads"
++DEFAULT_DB_PATH = BASE_DIR / "data" / "jobs.db"
+ app.state.uploads_dir = DEFAULT_UPLOADS_DIR
+-app.state.jobs = []
++app.state.db_path = DEFAULT_DB_PATH
+ 
+ 
+-@dataclass
+-class JobRecord:
+-    id: str
+-    filename: str
+-    status: str
+-    created_at: str
+-    upload_path: str
++@app.on_event("startup")
++def startup() -> None:
++    init_db(get_db_path())
+ 
+ 
+ def get_job_store() -> list[JobRecord]:
+-    return app.state.jobs
++    return list_jobs(get_db_path())
++
++
++def get_db_path() -> Path:
++    return Path(app.state.db_path)
+ 
+ 
+ def get_uploads_dir() -> Path:
+@@ -65,8 +67,8 @@
+ 
+ @app.post("/upload", response_class=HTMLResponse)
+ async def upload_files(request: Request, files: list[UploadFile] = File(...)):
+-    jobs = get_job_store()
+     uploads_dir = ensure_uploads_dir()
++    db_path = get_db_path()
+ 
+     for upload in files:
+         if not upload.filename:
+@@ -81,7 +83,9 @@
+                 shutil.copyfileobj(upload.file, outfile)
+         finally:
+             await upload.close()
+-        jobs.append(new_job_record(job_id, safe_name, destination))
++        insert_job(db_path, new_job_record(job_id, safe_name, destination))
++
++    jobs = list_jobs(db_path)
+ 
+     return templates.TemplateResponse(
+         request,
+diff --git a/mlx_ui/templates/index.html b/mlx_ui/templates/index.html
+index d02c9f89f6d46241bbc89b57bd616f21fa57ddf9..fd98aea99956baf4d5692b9960df62df84cbc6a5
+--- a/mlx_ui/templates/index.html
++++ b/mlx_ui/templates/index.html
+@@ -356,10 +356,24 @@
+           >
+             <h2>History</h2>
+             <p>Completed jobs will appear here with download links.</p>
+-            <div class="placeholder">
+-              <div class="placeholder-row">No completed jobs yet.</div>
+-              <div class="placeholder-row">Check back after a run.</div>
+-            </div>
++            {% if jobs %}
++              <div class="job-list" aria-live="polite">
++                {% for job in jobs %}
++                  <div class="job-row">
++                    <div>
++                      <div class="job-name">{{ job.filename }}</div>
++                      <div class="job-meta">Added {{ job.created_at }}</div>
++                    </div>
++                    <div class="job-status">{{ job.status }}</div>
++                  </div>
++                {% endfor %}
++              </div>
++            {% else %}
++              <div class="placeholder">
++                <div class="placeholder-row">No completed jobs yet.</div>
++                <div class="placeholder-row">Check back after a run.</div>
++              </div>
++            {% endif %}
+           </section>
+         </div>
+       </section>
+
+file update:
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index 7e8e0380aa181cdc4704f5a08306c8c1013566e3..d2f6b05031a3edb4f5771e255f9f2f823a603e59
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -1,4 +1,3 @@
+-from dataclasses import dataclass
+ from datetime import datetime, timezone
+ from pathlib import Path
+ import shutil
+@@ -8,25 +7,28 @@
+ from fastapi.responses import HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
++
+ app = FastAPI(title="Whisper WebUI (MLX)")
+ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+ BASE_DIR = Path(__file__).resolve().parent.parent
+ DEFAULT_UPLOADS_DIR = BASE_DIR / "data" / "uploads"
++DEFAULT_DB_PATH = BASE_DIR / "data" / "jobs.db"
+ app.state.uploads_dir = DEFAULT_UPLOADS_DIR
+-app.state.jobs = []
++app.state.db_path = DEFAULT_DB_PATH
+ 
+ 
+-@dataclass
+-class JobRecord:
+-    id: str
+-    filename: str
+-    status: str
+-    created_at: str
+-    upload_path: str
++@app.on_event("startup")
++def startup() -> None:
++    init_db(get_db_path())
+ 
+ 
+ def get_job_store() -> list[JobRecord]:
+-    return app.state.jobs
++    return list_jobs(get_db_path())
++
++
++def get_db_path() -> Path:
++    return Path(app.state.db_path)
+ 
+ 
+ def get_uploads_dir() -> Path:
+@@ -65,8 +67,8 @@
+ 
+ @app.post("/upload", response_class=HTMLResponse)
+ async def upload_files(request: Request, files: list[UploadFile] = File(...)):
+-    jobs = get_job_store()
+     uploads_dir = ensure_uploads_dir()
++    db_path = get_db_path()
+ 
+     for upload in files:
+         if not upload.filename:
+@@ -81,7 +83,9 @@
+                 shutil.copyfileobj(upload.file, outfile)
+         finally:
+             await upload.close()
+-        jobs.append(new_job_record(job_id, safe_name, destination))
++        insert_job(db_path, new_job_record(job_id, safe_name, destination))
++
++    jobs = list_jobs(db_path)
+ 
+     return templates.TemplateResponse(
+         request,
+diff --git a/mlx_ui/templates/index.html b/mlx_ui/templates/index.html
+index d02c9f89f6d46241bbc89b57bd616f21fa57ddf9..fd98aea99956baf4d5692b9960df62df84cbc6a5
+--- a/mlx_ui/templates/index.html
++++ b/mlx_ui/templates/index.html
+@@ -356,10 +356,24 @@
+           >
+             <h2>History</h2>
+             <p>Completed jobs will appear here with download links.</p>
+-            <div class="placeholder">
+-              <div class="placeholder-row">No completed jobs yet.</div>
+-              <div class="placeholder-row">Check back after a run.</div>
+-            </div>
++            {% if jobs %}
++              <div class="job-list" aria-live="polite">
++                {% for job in jobs %}
++                  <div class="job-row">
++                    <div>
++                      <div class="job-name">{{ job.filename }}</div>
++                      <div class="job-meta">Added {{ job.created_at }}</div>
++                    </div>
++                    <div class="job-status">{{ job.status }}</div>
++                  </div>
++                {% endfor %}
++              </div>
++            {% else %}
++              <div class="placeholder">
++                <div class="placeholder-row">No completed jobs yet.</div>
++                <div class="placeholder-row">Check back after a run.</div>
++              </div>
++            {% endif %}
+           </section>
+         </div>
+       </section>
+
+
+thinking
+**Updating docs/tree.md for new modules**
+file update
+M /Users/ivankhokhlov/code/mlx-ui/./docs/tree.md
+@@ -6,5 +6,5 @@
+ - `.agent/` — durable loop state + prompts
+-- `data/` — runtime uploads/results/logs (created on demand)
++- `data/` — runtime uploads/results/logs/jobs.db (created on demand)
+ - `docs/` — spec + dev notes + this tree map
+-- `mlx_ui/` — FastAPI app package (see `app.py`)
++- `mlx_ui/` — FastAPI app package (`app.py`, `db.py`)
+ - `mlx_ui/templates/` — Jinja2 templates
+apply_patch(auto_approved=true) exited 0 in 30ms:
+Success. Updated the following files:
+M docs/tree.md
+file update:
+diff --git a/docs/tree.md b/docs/tree.md
+index b27a1b2a13b3fb55753c1a7a8078d54ad9bd522b..ae097fb5a436817a904b215724378f37e52aa66a
+--- a/docs/tree.md
++++ b/docs/tree.md
+@@ -4,9 +4,9 @@
+ 
+ ## Current (bootstrap)
+ - `.agent/` — durable loop state + prompts
+-- `data/` — runtime uploads/results/logs (created on demand)
++- `data/` — runtime uploads/results/logs/jobs.db (created on demand)
+ - `docs/` — spec + dev notes + this tree map
+-- `mlx_ui/` — FastAPI app package (see `app.py`)
++- `mlx_ui/` — FastAPI app package (`app.py`, `db.py`)
+ - `mlx_ui/templates/` — Jinja2 templates
+ - `scripts/` — loop scripts + setup/run scripts (to be implemented)
+ - `tests/` — pytest suite
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index 7e8e0380aa181cdc4704f5a08306c8c1013566e3..d2f6b05031a3edb4f5771e255f9f2f823a603e59
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -1,4 +1,3 @@
+-from dataclasses import dataclass
+ from datetime import datetime, timezone
+ from pathlib import Path
+ import shutil
+@@ -8,25 +7,28 @@
+ from fastapi.responses import HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
++
+ app = FastAPI(title="Whisper WebUI (MLX)")
+ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+ BASE_DIR = Path(__file__).resolve().parent.parent
+ DEFAULT_UPLOADS_DIR = BASE_DIR / "data" / "uploads"
++DEFAULT_DB_PATH = BASE_DIR / "data" / "jobs.db"
+ app.state.uploads_dir = DEFAULT_UPLOADS_DIR
+-app.state.jobs = []
++app.state.db_path = DEFAULT_DB_PATH
+ 
+ 
+-@dataclass
+-class JobRecord:
+-    id: str
+-    filename: str
+-    status: str
+-    created_at: str
+-    upload_path: str
++@app.on_event("startup")
++def startup() -> None:
++    init_db(get_db_path())
+ 
+ 
+ def get_job_store() -> list[JobRecord]:
+-    return app.state.jobs
++    return list_jobs(get_db_path())
++
++
++def get_db_path() -> Path:
++    return Path(app.state.db_path)
+ 
+ 
+ def get_uploads_dir() -> Path:
+@@ -65,8 +67,8 @@
+ 
+ @app.post("/upload", response_class=HTMLResponse)
+ async def upload_files(request: Request, files: list[UploadFile] = File(...)):
+-    jobs = get_job_store()
+     uploads_dir = ensure_uploads_dir()
++    db_path = get_db_path()
+ 
+     for upload in files:
+         if not upload.filename:
+@@ -81,7 +83,9 @@
+                 shutil.copyfileobj(upload.file, outfile)
+         finally:
+             await upload.close()
+-        jobs.append(new_job_record(job_id, safe_name, destination))
++        insert_job(db_path, new_job_record(job_id, safe_name, destination))
++
++    jobs = list_jobs(db_path)
+ 
+     return templates.TemplateResponse(
+         request,
+diff --git a/mlx_ui/templates/index.html b/mlx_ui/templates/index.html
+index d02c9f89f6d46241bbc89b57bd616f21fa57ddf9..fd98aea99956baf4d5692b9960df62df84cbc6a5
+--- a/mlx_ui/templates/index.html
++++ b/mlx_ui/templates/index.html
+@@ -356,10 +356,24 @@
+           >
+             <h2>History</h2>
+             <p>Completed jobs will appear here with download links.</p>
+-            <div class="placeholder">
+-              <div class="placeholder-row">No completed jobs yet.</div>
+-              <div class="placeholder-row">Check back after a run.</div>
+-            </div>
++            {% if jobs %}
++              <div class="job-list" aria-live="polite">
++                {% for job in jobs %}
++                  <div class="job-row">
++                    <div>
++                      <div class="job-name">{{ job.filename }}</div>
++                      <div class="job-meta">Added {{ job.created_at }}</div>
++                    </div>
++                    <div class="job-status">{{ job.status }}</div>
++                  </div>
++                {% endfor %}
++              </div>
++            {% else %}
++              <div class="placeholder">
++                <div class="placeholder-row">No completed jobs yet.</div>
++                <div class="placeholder-row">Check back after a run.</div>
++              </div>
++            {% endif %}
+           </section>
+         </div>
+       </section>
+
+file update:
+diff --git a/docs/tree.md b/docs/tree.md
+index b27a1b2a13b3fb55753c1a7a8078d54ad9bd522b..ae097fb5a436817a904b215724378f37e52aa66a
+--- a/docs/tree.md
++++ b/docs/tree.md
+@@ -4,9 +4,9 @@
+ 
+ ## Current (bootstrap)
+ - `.agent/` — durable loop state + prompts
+-- `data/` — runtime uploads/results/logs (created on demand)
++- `data/` — runtime uploads/results/logs/jobs.db (created on demand)
+ - `docs/` — spec + dev notes + this tree map
+-- `mlx_ui/` — FastAPI app package (see `app.py`)
++- `mlx_ui/` — FastAPI app package (`app.py`, `db.py`)
+ - `mlx_ui/templates/` — Jinja2 templates
+ - `scripts/` — loop scripts + setup/run scripts (to be implemented)
+ - `tests/` — pytest suite
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index 7e8e0380aa181cdc4704f5a08306c8c1013566e3..d2f6b05031a3edb4f5771e255f9f2f823a603e59
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -1,4 +1,3 @@
+-from dataclasses import dataclass
+ from datetime import datetime, timezone
+ from pathlib import Path
+ import shutil
+@@ -8,25 +7,28 @@
+ from fastapi.responses import HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
++
+ app = FastAPI(title="Whisper WebUI (MLX)")
+ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+ BASE_DIR = Path(__file__).resolve().parent.parent
+ DEFAULT_UPLOADS_DIR = BASE_DIR / "data" / "uploads"
++DEFAULT_DB_PATH = BASE_DIR / "data" / "jobs.db"
+ app.state.uploads_dir = DEFAULT_UPLOADS_DIR
+-app.state.jobs = []
++app.state.db_path = DEFAULT_DB_PATH
+ 
+ 
+-@dataclass
+-class JobRecord:
+-    id: str
+-    filename: str
+-    status: str
+-    created_at: str
+-    upload_path: str
++@app.on_event("startup")
++def startup() -> None:
++    init_db(get_db_path())
+ 
+ 
+ def get_job_store() -> list[JobRecord]:
+-    return app.state.jobs
++    return list_jobs(get_db_path())
++
++
++def get_db_path() -> Path:
++    return Path(app.state.db_path)
+ 
+ 
+ def get_uploads_dir() -> Path:
+@@ -65,8 +67,8 @@
+ 
+ @app.post("/upload", response_class=HTMLResponse)
+ async def upload_files(request: Request, files: list[UploadFile] = File(...)):
+-    jobs = get_job_store()
+     uploads_dir = ensure_uploads_dir()
++    db_path = get_db_path()
+ 
+     for upload in files:
+         if not upload.filename:
+@@ -81,7 +83,9 @@
+                 shutil.copyfileobj(upload.file, outfile)
+         finally:
+             await upload.close()
+-        jobs.append(new_job_record(job_id, safe_name, destination))
++        insert_job(db_path, new_job_record(job_id, safe_name, destination))
++
++    jobs = list_jobs(db_path)
+ 
+     return templates.TemplateResponse(
+         request,
+diff --git a/mlx_ui/templates/index.html b/mlx_ui/templates/index.html
+index d02c9f89f6d46241bbc89b57bd616f21fa57ddf9..fd98aea99956baf4d5692b9960df62df84cbc6a5
+--- a/mlx_ui/templates/index.html
++++ b/mlx_ui/templates/index.html
+@@ -356,10 +356,24 @@
+           >
+             <h2>History</h2>
+             <p>Completed jobs will appear here with download links.</p>
+-            <div class="placeholder">
+-              <div class="placeholder-row">No completed jobs yet.</div>
+-              <div class="placeholder-row">Check back after a run.</div>
+-            </div>
++            {% if jobs %}
++              <div class="job-list" aria-live="polite">
++                {% for job in jobs %}
++                  <div class="job-row">
++                    <div>
++                      <div class="job-name">{{ job.filename }}</div>
++                      <div class="job-meta">Added {{ job.created_at }}</div>
++                    </div>
++                    <div class="job-status">{{ job.status }}</div>
++                  </div>
++                {% endfor %}
++              </div>
++            {% else %}
++              <div class="placeholder">
++                <div class="placeholder-row">No completed jobs yet.</div>
++                <div class="placeholder-row">Check back after a run.</div>
++              </div>
++            {% endif %}
+           </section>
+         </div>
+       </section>
+
+
+thinking
+**Verifying app imports and DB usage**
+
+I'm confirming that the new module path is included properly and ensuring `mlx_ui/app.py` uses the database functions like `list_jobs` and `get_job_store` correctly, including in the root read handler. Next, I'll verify correctness by reviewing `mlx_ui/app.py`.
+exec
+/bin/zsh -lc "sed -n '1,220p' mlx_ui/app.py" in /Users/ivankhokhlov/code/mlx-ui succeeded in 85ms:
+from datetime import datetime, timezone
+from pathlib import Path
+import shutil
+from uuid import uuid4
+
+from fastapi import FastAPI, File, Request, UploadFile
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+
+from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+
+app = FastAPI(title="Whisper WebUI (MLX)")
+templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+BASE_DIR = Path(__file__).resolve().parent.parent
+DEFAULT_UPLOADS_DIR = BASE_DIR / "data" / "uploads"
+DEFAULT_DB_PATH = BASE_DIR / "data" / "jobs.db"
+app.state.uploads_dir = DEFAULT_UPLOADS_DIR
+app.state.db_path = DEFAULT_DB_PATH
+
+
+file update:
+diff --git a/docs/tree.md b/docs/tree.md
+index b27a1b2a13b3fb55753c1a7a8078d54ad9bd522b..ae097fb5a436817a904b215724378f37e52aa66a
+--- a/docs/tree.md
++++ b/docs/tree.md
+@@ -4,9 +4,9 @@
+ 
+ ## Current (bootstrap)
+ - `.agent/` — durable loop state + prompts
+-- `data/` — runtime uploads/results/logs (created on demand)
++- `data/` — runtime uploads/results/logs/jobs.db (created on demand)
+ - `docs/` — spec + dev notes + this tree map
+-- `mlx_ui/` — FastAPI app package (see `app.py`)
++- `mlx_ui/` — FastAPI app package (`app.py`, `db.py`)
+ - `mlx_ui/templates/` — Jinja2 templates
+ - `scripts/` — loop scripts + setup/run scripts (to be implemented)
+ - `tests/` — pytest suite
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index 7e8e0380aa181cdc4704f5a08306c8c1013566e3..d2f6b05031a3edb4f5771e255f9f2f823a603e59
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -1,4 +1,3 @@
+-from dataclasses import dataclass
+ from datetime import datetime, timezone
+ from pathlib import Path
+ import shutil
+@@ -8,25 +7,28 @@
+ from fastapi.responses import HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
++
+ app = FastAPI(title="Whisper WebUI (MLX)")
+ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+ BASE_DIR = Path(__file__).resolve().parent.parent
+ DEFAULT_UPLOADS_DIR = BASE_DIR / "data" / "uploads"
++DEFAULT_DB_PATH = BASE_DIR / "data" / "jobs.db"
+ app.state.uploads_dir = DEFAULT_UPLOADS_DIR
+-app.state.jobs = []
++app.state.db_path = DEFAULT_DB_PATH
+ 
+ 
+-@dataclass
+-class JobRecord:
+-    id: str
+-    filename: str
+-    status: str
+-    created_at: str
+-    upload_path: str
++@app.on_event("startup")
++def startup() -> None:
++    init_db(get_db_path())
+ 
+ 
+ def get_job_store() -> list[JobRecord]:
+-    return app.state.jobs
++    return list_jobs(get_db_path())
++
++
++def get_db_path() -> Path:
++    return Path(app.state.db_path)
+ 
+ 
+ def get_uploads_dir() -> Path:
+@@ -65,8 +67,8 @@
+ 
+ @app.post("/upload", response_class=HTMLResponse)
+ async def upload_files(request: Request, files: list[UploadFile] = File(...)):
+-    jobs = get_job_store()
+     uploads_dir = ensure_uploads_dir()
++    db_path = get_db_path()
+ 
+     for upload in files:
+         if not upload.filename:
+@@ -81,7 +83,9 @@
+                 shutil.copyfileobj(upload.file, outfile)
+         finally:
+             await upload.close()
+-        jobs.append(new_job_record(job_id, safe_name, destination))
++        insert_job(db_path, new_job_record(job_id, safe_name, destination))
++
++    jobs = list_jobs(db_path)
+ 
+     return templates.TemplateResponse(
+         request,
+diff --git a/mlx_ui/templates/index.html b/mlx_ui/templates/index.html
+index d02c9f89f6d46241bbc89b57bd616f21fa57ddf9..fd98aea99956baf4d5692b9960df62df84cbc6a5
+--- a/mlx_ui/templates/index.html
++++ b/mlx_ui/templates/index.html
+@@ -356,10 +356,24 @@
+           >
+             <h2>History</h2>
+             <p>Completed jobs will appear here with download links.</p>
+-            <div class="placeholder">
+-              <div class="placeholder-row">No completed jobs yet.</div>
+-              <div class="placeholder-row">Check back after a run.</div>
+-            </div>
++            {% if jobs %}
++              <div class="job-list" aria-live="polite">
++                {% for job in jobs %}
++                  <div class="job-row">
++                    <div>
++                      <div class="job-name">{{ job.filename }}</div>
++                      <div class="job-meta">Added {{ job.created_at }}</div>
++                    </div>
++                    <div class="job-status">{{ job.status }}</div>
++                  </div>
++                {% endfor %}
++              </div>
++            {% else %}
++              <div class="placeholder">
++                <div class="placeholder-row">No completed jobs yet.</div>
++                <div class="placeholder-row">Check back after a run.</div>
++              </div>
++            {% endif %}
+           </section>
+         </div>
+       </section>
+
+
+
+thinking
+**Verifying test DB initialization**
+
+I'm clarifying that the database should initialize on app startup, which `TestClient` triggers when used as a context manager, ensuring `list_jobs` won't fail in tests; fallback `init_db` calls may be unnecessary.
+thinking
+**Confirming test and lint setup**
+
+The use of `TestClient` as a context manager means explicit `init_db` calls in tests aren't needed. I'll proceed to run tests and lint via `make` using logged commands while ensuring environment variables and log paths are correctly handled.
+exec
+/bin/zsh -lc 'bash -lc "set -o pipefail; make test 2>&1 | tee .agent/logs/test_${CODEX_ITERATION}.log"' in /Users/ivankhokhlov/code/mlx-ui succeeded in 1.28s:
+poetry run pytest
+============================= test session starts ==============================
+platform darwin -- Python 3.12.12, pytest-8.4.2, pluggy-1.6.0
+rootdir: /Users/ivankhokhlov/code/mlx-ui
+configfile: pyproject.toml
+plugins: anyio-4.12.1
+collected 3 items
+
+tests/test_app.py ...                                                    [100%]
+
+=============================== warnings summary ===============================
+mlx_ui/app.py:21
+  /Users/ivankhokhlov/code/mlx-ui/mlx_ui/app.py:21: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+file update:
+diff --git a/docs/tree.md b/docs/tree.md
+index b27a1b2a13b3fb55753c1a7a8078d54ad9bd522b..ae097fb5a436817a904b215724378f37e52aa66a
+--- a/docs/tree.md
++++ b/docs/tree.md
+@@ -4,9 +4,9 @@
+ 
+ ## Current (bootstrap)
+ - `.agent/` — durable loop state + prompts
+-- `data/` — runtime uploads/results/logs (created on demand)
++- `data/` — runtime uploads/results/logs/jobs.db (created on demand)
+ - `docs/` — spec + dev notes + this tree map
+-- `mlx_ui/` — FastAPI app package (see `app.py`)
++- `mlx_ui/` — FastAPI app package (`app.py`, `db.py`)
+ - `mlx_ui/templates/` — Jinja2 templates
+ - `scripts/` — loop scripts + setup/run scripts (to be implemented)
+ - `tests/` — pytest suite
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index 7e8e0380aa181cdc4704f5a08306c8c1013566e3..d2f6b05031a3edb4f5771e255f9f2f823a603e59
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -1,4 +1,3 @@
+-from dataclasses import dataclass
+ from datetime import datetime, timezone
+ from pathlib import Path
+ import shutil
+@@ -8,25 +7,28 @@
+ from fastapi.responses import HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
++
+ app = FastAPI(title="Whisper WebUI (MLX)")
+ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+ BASE_DIR = Path(__file__).resolve().parent.parent
+ DEFAULT_UPLOADS_DIR = BASE_DIR / "data" / "uploads"
++DEFAULT_DB_PATH = BASE_DIR / "data" / "jobs.db"
+ app.state.uploads_dir = DEFAULT_UPLOADS_DIR
+-app.state.jobs = []
++app.state.db_path = DEFAULT_DB_PATH
+ 
+ 
+-@dataclass
+-class JobRecord:
+-    id: str
+-    filename: str
+-    status: str
+-    created_at: str
+-    upload_path: str
++@app.on_event("startup")
++def startup() -> None:
++    init_db(get_db_path())
+ 
+ 
+ def get_job_store() -> list[JobRecord]:
+-    return app.state.jobs
++    return list_jobs(get_db_path())
++
++
++def get_db_path() -> Path:
++    return Path(app.state.db_path)
+ 
+ 
+ def get_uploads_dir() -> Path:
+@@ -65,8 +67,8 @@
+ 
+ @app.post("/upload", response_class=HTMLResponse)
+ async def upload_files(request: Request, files: list[UploadFile] = File(...)):
+-    jobs = get_job_store()
+     uploads_dir = ensure_uploads_dir()
++    db_path = get_db_path()
+ 
+     for upload in files:
+         if not upload.filename:
+@@ -81,7 +83,9 @@
+                 shutil.copyfileobj(upload.file, outfile)
+         finally:
+             await upload.close()
+-        jobs.append(new_job_record(job_id, safe_name, destination))
++        insert_job(db_path, new_job_record(job_id, safe_name, destination))
++
++    jobs = list_jobs(db_path)
+ 
+     return templates.TemplateResponse(
+         request,
+diff --git a/mlx_ui/templates/index.html b/mlx_ui/templates/index.html
+index d02c9f89f6d46241bbc89b57bd616f21fa57ddf9..fd98aea99956baf4d5692b9960df62df84cbc6a5
+--- a/mlx_ui/templates/index.html
++++ b/mlx_ui/templates/index.html
+@@ -356,10 +356,24 @@
+           >
+             <h2>History</h2>
+             <p>Completed jobs will appear here with download links.</p>
+-            <div class="placeholder">
+-              <div class="placeholder-row">No completed jobs yet.</div>
+-              <div class="placeholder-row">Check back after a run.</div>
+-            </div>
++            {% if jobs %}
++              <div class="job-list" aria-live="polite">
++                {% for job in jobs %}
++                  <div class="job-row">
++                    <div>
++                      <div class="job-name">{{ job.filename }}</div>
++                      <div class="job-meta">Added {{ job.created_at }}</div>
++                    </div>
++                    <div class="job-status">{{ job.status }}</div>
++                  </div>
++                {% endfor %}
++              </div>
++            {% else %}
++              <div class="placeholder">
++                <div class="placeholder-row">No completed jobs yet.</div>
++                <div class="placeholder-row">Check back after a run.</div>
++              </div>
++            {% endif %}
+           </section>
+         </div>
+       </section>
+
+
+thinking
+**Deciding on deprecation warnings**
+
+The persistent FastAPI deprecation warning from on_event is noted but left unchanged to avoid added complexity, since tests and linting do not currently treat warnings as errors.
+exec
+/bin/zsh -lc 'bash -lc "set -o pipefail; make lint 2>&1 | tee .agent/logs/lint_${CODEX_ITERATION}.log"' in /Users/ivankhokhlov/code/mlx-ui succeeded in 671ms:
+poetry run ruff check .
+All checks passed!
+file update:
+diff --git a/docs/tree.md b/docs/tree.md
+index b27a1b2a13b3fb55753c1a7a8078d54ad9bd522b..ae097fb5a436817a904b215724378f37e52aa66a
+--- a/docs/tree.md
++++ b/docs/tree.md
+@@ -4,9 +4,9 @@
+ 
+ ## Current (bootstrap)
+ - `.agent/` — durable loop state + prompts
+-- `data/` — runtime uploads/results/logs (created on demand)
++- `data/` — runtime uploads/results/logs/jobs.db (created on demand)
+ - `docs/` — spec + dev notes + this tree map
+-- `mlx_ui/` — FastAPI app package (see `app.py`)
++- `mlx_ui/` — FastAPI app package (`app.py`, `db.py`)
+ - `mlx_ui/templates/` — Jinja2 templates
+ - `scripts/` — loop scripts + setup/run scripts (to be implemented)
+ - `tests/` — pytest suite
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index 7e8e0380aa181cdc4704f5a08306c8c1013566e3..d2f6b05031a3edb4f5771e255f9f2f823a603e59
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -1,4 +1,3 @@
+-from dataclasses import dataclass
+ from datetime import datetime, timezone
+ from pathlib import Path
+ import shutil
+@@ -8,25 +7,28 @@
+ from fastapi.responses import HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
++
+ app = FastAPI(title="Whisper WebUI (MLX)")
+ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+ BASE_DIR = Path(__file__).resolve().parent.parent
+ DEFAULT_UPLOADS_DIR = BASE_DIR / "data" / "uploads"
++DEFAULT_DB_PATH = BASE_DIR / "data" / "jobs.db"
+ app.state.uploads_dir = DEFAULT_UPLOADS_DIR
+-app.state.jobs = []
++app.state.db_path = DEFAULT_DB_PATH
+ 
+ 
+-@dataclass
+-class JobRecord:
+-    id: str
+-    filename: str
+-    status: str
+-    created_at: str
+-    upload_path: str
++@app.on_event("startup")
++def startup() -> None:
++    init_db(get_db_path())
+ 
+ 
+ def get_job_store() -> list[JobRecord]:
+-    return app.state.jobs
++    return list_jobs(get_db_path())
++
++
++def get_db_path() -> Path:
++    return Path(app.state.db_path)
+ 
+ 
+ def get_uploads_dir() -> Path:
+@@ -65,8 +67,8 @@
+ 
+ @app.post("/upload", response_class=HTMLResponse)
+ async def upload_files(request: Request, files: list[UploadFile] = File(...)):
+-    jobs = get_job_store()
+     uploads_dir = ensure_uploads_dir()
++    db_path = get_db_path()
+ 
+     for upload in files:
+         if not upload.filename:
+@@ -81,7 +83,9 @@
+                 shutil.copyfileobj(upload.file, outfile)
+         finally:
+             await upload.close()
+-        jobs.append(new_job_record(job_id, safe_name, destination))
++        insert_job(db_path, new_job_record(job_id, safe_name, destination))
++
++    jobs = list_jobs(db_path)
+ 
+     return templates.TemplateResponse(
+         request,
+diff --git a/mlx_ui/templates/index.html b/mlx_ui/templates/index.html
+index d02c9f89f6d46241bbc89b57bd616f21fa57ddf9..fd98aea99956baf4d5692b9960df62df84cbc6a5
+--- a/mlx_ui/templates/index.html
++++ b/mlx_ui/templates/index.html
+@@ -356,10 +356,24 @@
+           >
+             <h2>History</h2>
+             <p>Completed jobs will appear here with download links.</p>
+-            <div class="placeholder">
+-              <div class="placeholder-row">No completed jobs yet.</div>
+-              <div class="placeholder-row">Check back after a run.</div>
+-            </div>
++            {% if jobs %}
++              <div class="job-list" aria-live="polite">
++                {% for job in jobs %}
++                  <div class="job-row">
++                    <div>
++                      <div class="job-name">{{ job.filename }}</div>
++                      <div class="job-meta">Added {{ job.created_at }}</div>
++                    </div>
++                    <div class="job-status">{{ job.status }}</div>
++                  </div>
++                {% endfor %}
++              </div>
++            {% else %}
++              <div class="placeholder">
++                <div class="placeholder-row">No completed jobs yet.</div>
++                <div class="placeholder-row">Check back after a run.</div>
++              </div>
++            {% endif %}
+           </section>
+         </div>
+       </section>
+
+
+thinking
+**Planning detailed worker report**
+
+I'm preparing to update the report file with task info, changes made, list of changed files (using git status -sb), commands run and their results, plus errors if any.
+exec
+/bin/zsh -lc 'git status -sb' in /Users/ivankhokhlov/code/mlx-ui succeeded in 95ms:
+## master
+ M .agent/last_judge.txt
+ M .agent/last_planner.txt
+ M .agent/logs/judge_4.err
+ M .agent/logs/judge_4.out
+ M .agent/logs/judge_5.err
+ M .agent/logs/judge_5.out
+ M .agent/plan.md
+ M .agent/progress.md
+ M .agent/queue.md
+ M docs/tree.md
+ M mlx_ui/app.py
+ M mlx_ui/templates/index.html
+ M tests/test_app.py
+?? .agent/logs/lint_6.log
+?? .agent/logs/planner_6.err
+?? .agent/logs/planner_6.out
+?? .agent/logs/test_6.log
+?? .agent/logs/worker_6.err
+?? .agent/logs/worker_6.out
+file update:
+diff --git a/docs/tree.md b/docs/tree.md
+index b27a1b2a13b3fb55753c1a7a8078d54ad9bd522b..ae097fb5a436817a904b215724378f37e52aa66a
+--- a/docs/tree.md
++++ b/docs/tree.md
+@@ -4,9 +4,9 @@
+ 
+ ## Current (bootstrap)
+ - `.agent/` — durable loop state + prompts
+-- `data/` — runtime uploads/results/logs (created on demand)
++- `data/` — runtime uploads/results/logs/jobs.db (created on demand)
+ - `docs/` — spec + dev notes + this tree map
+-- `mlx_ui/` — FastAPI app package (see `app.py`)
++- `mlx_ui/` — FastAPI app package (`app.py`, `db.py`)
+ - `mlx_ui/templates/` — Jinja2 templates
+ - `scripts/` — loop scripts + setup/run scripts (to be implemented)
+ - `tests/` — pytest suite
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index 7e8e0380aa181cdc4704f5a08306c8c1013566e3..d2f6b05031a3edb4f5771e255f9f2f823a603e59
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -1,4 +1,3 @@
+-from dataclasses import dataclass
+ from datetime import datetime, timezone
+ from pathlib import Path
+ import shutil
+@@ -8,25 +7,28 @@
+ from fastapi.responses import HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
++
+ app = FastAPI(title="Whisper WebUI (MLX)")
+ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+ BASE_DIR = Path(__file__).resolve().parent.parent
+ DEFAULT_UPLOADS_DIR = BASE_DIR / "data" / "uploads"
++DEFAULT_DB_PATH = BASE_DIR / "data" / "jobs.db"
+ app.state.uploads_dir = DEFAULT_UPLOADS_DIR
+-app.state.jobs = []
++app.state.db_path = DEFAULT_DB_PATH
+ 
+ 
+-@dataclass
+-class JobRecord:
+-    id: str
+-    filename: str
+-    status: str
+-    created_at: str
+-    upload_path: str
++@app.on_event("startup")
++def startup() -> None:
++    init_db(get_db_path())
+ 
+ 
+ def get_job_store() -> list[JobRecord]:
+-    return app.state.jobs
++    return list_jobs(get_db_path())
++
++
++def get_db_path() -> Path:
++    return Path(app.state.db_path)
+ 
+ 
+ def get_uploads_dir() -> Path:
+@@ -65,8 +67,8 @@
+ 
+ @app.post("/upload", response_class=HTMLResponse)
+ async def upload_files(request: Request, files: list[UploadFile] = File(...)):
+-    jobs = get_job_store()
+     uploads_dir = ensure_uploads_dir()
++    db_path = get_db_path()
+ 
+     for upload in files:
+         if not upload.filename:
+@@ -81,7 +83,9 @@
+                 shutil.copyfileobj(upload.file, outfile)
+         finally:
+             await upload.close()
+-        jobs.append(new_job_record(job_id, safe_name, destination))
++        insert_job(db_path, new_job_record(job_id, safe_name, destination))
++
++    jobs = list_jobs(db_path)
+ 
+     return templates.TemplateResponse(
+         request,
+diff --git a/mlx_ui/templates/index.html b/mlx_ui/templates/index.html
+index d02c9f89f6d46241bbc89b57bd616f21fa57ddf9..fd98aea99956baf4d5692b9960df62df84cbc6a5
+--- a/mlx_ui/templates/index.html
++++ b/mlx_ui/templates/index.html
+@@ -356,10 +356,24 @@
+           >
+             <h2>History</h2>
+             <p>Completed jobs will appear here with download links.</p>
+-            <div class="placeholder">
+-              <div class="placeholder-row">No completed jobs yet.</div>
+-              <div class="placeholder-row">Check back after a run.</div>
+-            </div>
++            {% if jobs %}
++              <div class="job-list" aria-live="polite">
++                {% for job in jobs %}
++                  <div class="job-row">
++                    <div>
++                      <div class="job-name">{{ job.filename }}</div>
++                      <div class="job-meta">Added {{ job.created_at }}</div>
++                    </div>
++                    <div class="job-status">{{ job.status }}</div>
++                  </div>
++                {% endfor %}
++              </div>
++            {% else %}
++              <div class="placeholder">
++                <div class="placeholder-row">No completed jobs yet.</div>
++                <div class="placeholder-row">Check back after a run.</div>
++              </div>
++            {% endif %}
+           </section>
+         </div>
+       </section>
+
+
+thinking
+**Preparing detailed worker report**
+
+I'm compiling the worker report to include task info, changed files, commands run with results, and relevant logs for iteration 6, ensuring required `.agent` files and logs are properly referenced without reverting unrelated changes.
+exec
+/bin/zsh -lc "cat <<'EOF' > .agent/worker_report.md
+# Worker Report
+
+Task: WUI-011 — Persistent job store (SQLite)
+
+What changed:
+- Added a SQLite-backed job store module and initialize it on app startup.
+- Swapped in-memory job tracking for DB reads/writes during uploads and page renders.
+- Rendered persisted jobs on both Queue and History tabs.
+- Updated tests to use temporary DB paths and verify persistence across a simulated restart.
+- Updated the repo tree map to include the new database module and storage path.
+
+Files changed:
+- mlx_ui/db.py
+- mlx_ui/app.py
+- mlx_ui/templates/index.html
+- tests/test_app.py
+- docs/tree.md
+- .agent/worker_report.md
+- .agent/progress.md
+- .agent/logs/test_6.log
+- .agent/logs/lint_6.log
+
+Commands run + result:
+- "'`make test` (pass)
+- `make lint` (pass)
+EOF' in /Users/ivankhokhlov/code/mlx-ui succeeded in 100ms:
+
+file update:
+diff --git a/docs/tree.md b/docs/tree.md
+index b27a1b2a13b3fb55753c1a7a8078d54ad9bd522b..ae097fb5a436817a904b215724378f37e52aa66a
+--- a/docs/tree.md
++++ b/docs/tree.md
+@@ -4,9 +4,9 @@
+ 
+ ## Current (bootstrap)
+ - `.agent/` — durable loop state + prompts
+-- `data/` — runtime uploads/results/logs (created on demand)
++- `data/` — runtime uploads/results/logs/jobs.db (created on demand)
+ - `docs/` — spec + dev notes + this tree map
+-- `mlx_ui/` — FastAPI app package (see `app.py`)
++- `mlx_ui/` — FastAPI app package (`app.py`, `db.py`)
+ - `mlx_ui/templates/` — Jinja2 templates
+ - `scripts/` — loop scripts + setup/run scripts (to be implemented)
+ - `tests/` — pytest suite
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index 7e8e0380aa181cdc4704f5a08306c8c1013566e3..d2f6b05031a3edb4f5771e255f9f2f823a603e59
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -1,4 +1,3 @@
+-from dataclasses import dataclass
+ from datetime import datetime, timezone
+ from pathlib import Path
+ import shutil
+@@ -8,25 +7,28 @@
+ from fastapi.responses import HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
++
+ app = FastAPI(title="Whisper WebUI (MLX)")
+ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+ BASE_DIR = Path(__file__).resolve().parent.parent
+ DEFAULT_UPLOADS_DIR = BASE_DIR / "data" / "uploads"
++DEFAULT_DB_PATH = BASE_DIR / "data" / "jobs.db"
+ app.state.uploads_dir = DEFAULT_UPLOADS_DIR
+-app.state.jobs = []
++app.state.db_path = DEFAULT_DB_PATH
+ 
+ 
+-@dataclass
+-class JobRecord:
+-    id: str
+-    filename: str
+-    status: str
+-    created_at: str
+-    upload_path: str
++@app.on_event("startup")
++def startup() -> None:
++    init_db(get_db_path())
+ 
+ 
+ def get_job_store() -> list[JobRecord]:
+-    return app.state.jobs
++    return list_jobs(get_db_path())
++
++
++def get_db_path() -> Path:
++    return Path(app.state.db_path)
+ 
+ 
+ def get_uploads_dir() -> Path:
+@@ -65,8 +67,8 @@
+ 
+ @app.post("/upload", response_class=HTMLResponse)
+ async def upload_files(request: Request, files: list[UploadFile] = File(...)):
+-    jobs = get_job_store()
+     uploads_dir = ensure_uploads_dir()
++    db_path = get_db_path()
+ 
+     for upload in files:
+         if not upload.filename:
+@@ -81,7 +83,9 @@
+                 shutil.copyfileobj(upload.file, outfile)
+         finally:
+             await upload.close()
+-        jobs.append(new_job_record(job_id, safe_name, destination))
++        insert_job(db_path, new_job_record(job_id, safe_name, destination))
++
++    jobs = list_jobs(db_path)
+ 
+     return templates.TemplateResponse(
+         request,
+diff --git a/mlx_ui/templates/index.html b/mlx_ui/templates/index.html
+index d02c9f89f6d46241bbc89b57bd616f21fa57ddf9..fd98aea99956baf4d5692b9960df62df84cbc6a5
+--- a/mlx_ui/templates/index.html
++++ b/mlx_ui/templates/index.html
+@@ -356,10 +356,24 @@
+           >
+             <h2>History</h2>
+             <p>Completed jobs will appear here with download links.</p>
+-            <div class="placeholder">
+-              <div class="placeholder-row">No completed jobs yet.</div>
+-              <div class="placeholder-row">Check back after a run.</div>
+-            </div>
++            {% if jobs %}
++              <div class="job-list" aria-live="polite">
++                {% for job in jobs %}
++                  <div class="job-row">
++                    <div>
++                      <div class="job-name">{{ job.filename }}</div>
++                      <div class="job-meta">Added {{ job.created_at }}</div>
++                    </div>
++                    <div class="job-status">{{ job.status }}</div>
++                  </div>
++                {% endfor %}
++              </div>
++            {% else %}
++              <div class="placeholder">
++                <div class="placeholder-row">No completed jobs yet.</div>
++                <div class="placeholder-row">Check back after a run.</div>
++              </div>
++            {% endif %}
+           </section>
+         </div>
+       </section>
+
+
+thinking
+**Updating progress log with timestamp**
+
+I'll append a timestamped entry to .agent/progress.md reflecting the current iteration, task ID, and test and lint results using UTC ISO format for consistency.
+exec
+/bin/zsh -lc 'timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ"); echo "- ${timestamp} — WORKER — CODEX_ITERATION=${CODEX_ITERATION} — WUI-011 — tests: passed (make test); lint: passed (make lint)" >> .agent/progress.md' in /Users/ivankhokhlov/code/mlx-ui succeeded in 94ms:
+
+file update:
+diff --git a/docs/tree.md b/docs/tree.md
+index b27a1b2a13b3fb55753c1a7a8078d54ad9bd522b..ae097fb5a436817a904b215724378f37e52aa66a
+--- a/docs/tree.md
++++ b/docs/tree.md
+@@ -4,9 +4,9 @@
+ 
+ ## Current (bootstrap)
+ - `.agent/` — durable loop state + prompts
+-- `data/` — runtime uploads/results/logs (created on demand)
++- `data/` — runtime uploads/results/logs/jobs.db (created on demand)
+ - `docs/` — spec + dev notes + this tree map
+-- `mlx_ui/` — FastAPI app package (see `app.py`)
++- `mlx_ui/` — FastAPI app package (`app.py`, `db.py`)
+ - `mlx_ui/templates/` — Jinja2 templates
+ - `scripts/` — loop scripts + setup/run scripts (to be implemented)
+ - `tests/` — pytest suite
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index 7e8e0380aa181cdc4704f5a08306c8c1013566e3..d2f6b05031a3edb4f5771e255f9f2f823a603e59
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -1,4 +1,3 @@
+-from dataclasses import dataclass
+ from datetime import datetime, timezone
+ from pathlib import Path
+ import shutil
+@@ -8,25 +7,28 @@
+ from fastapi.responses import HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
++
+ app = FastAPI(title="Whisper WebUI (MLX)")
+ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+ BASE_DIR = Path(__file__).resolve().parent.parent
+ DEFAULT_UPLOADS_DIR = BASE_DIR / "data" / "uploads"
++DEFAULT_DB_PATH = BASE_DIR / "data" / "jobs.db"
+ app.state.uploads_dir = DEFAULT_UPLOADS_DIR
+-app.state.jobs = []
++app.state.db_path = DEFAULT_DB_PATH
+ 
+ 
+-@dataclass
+-class JobRecord:
+-    id: str
+-    filename: str
+-    status: str
+-    created_at: str
+-    upload_path: str
++@app.on_event("startup")
++def startup() -> None:
++    init_db(get_db_path())
+ 
+ 
+ def get_job_store() -> list[JobRecord]:
+-    return app.state.jobs
++    return list_jobs(get_db_path())
++
++
++def get_db_path() -> Path:
++    return Path(app.state.db_path)
+ 
+ 
+ def get_uploads_dir() -> Path:
+@@ -65,8 +67,8 @@
+ 
+ @app.post("/upload", response_class=HTMLResponse)
+ async def upload_files(request: Request, files: list[UploadFile] = File(...)):
+-    jobs = get_job_store()
+     uploads_dir = ensure_uploads_dir()
++    db_path = get_db_path()
+ 
+     for upload in files:
+         if not upload.filename:
+@@ -81,7 +83,9 @@
+                 shutil.copyfileobj(upload.file, outfile)
+         finally:
+             await upload.close()
+-        jobs.append(new_job_record(job_id, safe_name, destination))
++        insert_job(db_path, new_job_record(job_id, safe_name, destination))
++
++    jobs = list_jobs(db_path)
+ 
+     return templates.TemplateResponse(
+         request,
+diff --git a/mlx_ui/templates/index.html b/mlx_ui/templates/index.html
+index d02c9f89f6d46241bbc89b57bd616f21fa57ddf9..fd98aea99956baf4d5692b9960df62df84cbc6a5
+--- a/mlx_ui/templates/index.html
++++ b/mlx_ui/templates/index.html
+@@ -356,10 +356,24 @@
+           >
+             <h2>History</h2>
+             <p>Completed jobs will appear here with download links.</p>
+-            <div class="placeholder">
+-              <div class="placeholder-row">No completed jobs yet.</div>
+-              <div class="placeholder-row">Check back after a run.</div>
+-            </div>
++            {% if jobs %}
++              <div class="job-list" aria-live="polite">
++                {% for job in jobs %}
++                  <div class="job-row">
++                    <div>
++                      <div class="job-name">{{ job.filename }}</div>
++                      <div class="job-meta">Added {{ job.created_at }}</div>
++                    </div>
++                    <div class="job-status">{{ job.status }}</div>
++                  </div>
++                {% endfor %}
++              </div>
++            {% else %}
++              <div class="placeholder">
++                <div class="placeholder-row">No completed jobs yet.</div>
++                <div class="placeholder-row">Check back after a run.</div>
++              </div>
++            {% endif %}
+           </section>
+         </div>
+       </section>
+
+
+
+thinking
+**Reviewing database initialization and usage**
+
+I've confirmed `.agent/logs` and relevant docs are updated and now I'm checking the database setup flow. The current design calls `init_db` on startup to prepare the DB before jobs are listed, preventing errors. `list_jobs` is used safely after startup during tests and in runtime routes with the DB ready. The insertions open new connections per upload, which may have concurrency implications but are functionally sound.
+thinking
+**Summarizing implementation and test results**
+
+Implemented a SQLite-backed job store so uploads persist across restarts and appear in both Queue and History views; database logic is in `mlx_ui/db.py` and `mlx_ui/app.py`, with UI and tests updated in `mlx_ui/templates/index.html` and `tests/test_app.py`, plus `docs/tree.md` reflecting new files.  
+
+- Tests: `make test` (pass), `make lint` (pass).  
+- Worker report and logs: `.agent/worker_report.md`, `.agent/logs/test_6.log`, `.agent/logs/lint_6.log`.  
+
+Next suggested step: run `make run` and verify the UI properly shows persisted jobs after restarting the server.
+exec
+/bin/zsh -lc 'cat docs/tree.md' in /Users/ivankhokhlov/code/mlx-ui succeeded in 90ms:
+# Project tree (curated)
+
+This file is a human-maintained map of the repo. Update when structure changes.
+
+## Current (bootstrap)
+- `.agent/` — durable loop state + prompts
+- `data/` — runtime uploads/results/logs/jobs.db (created on demand)
+- `docs/` — spec + dev notes + this tree map
+- `mlx_ui/` — FastAPI app package (`app.py`, `db.py`)
+- `mlx_ui/templates/` — Jinja2 templates
+- `scripts/` — loop scripts + setup/run scripts (to be implemented)
+- `tests/` — pytest suite
+- `Makefile` — dev commands
+- `pyproject.toml` — dependencies and tooling
+- `README.md` — repo overview
+file update:
+diff --git a/docs/tree.md b/docs/tree.md
+index b27a1b2a13b3fb55753c1a7a8078d54ad9bd522b..ae097fb5a436817a904b215724378f37e52aa66a
+--- a/docs/tree.md
++++ b/docs/tree.md
+@@ -4,9 +4,9 @@
+ 
+ ## Current (bootstrap)
+ - `.agent/` — durable loop state + prompts
+-- `data/` — runtime uploads/results/logs (created on demand)
++- `data/` — runtime uploads/results/logs/jobs.db (created on demand)
+ - `docs/` — spec + dev notes + this tree map
+-- `mlx_ui/` — FastAPI app package (see `app.py`)
++- `mlx_ui/` — FastAPI app package (`app.py`, `db.py`)
+ - `mlx_ui/templates/` — Jinja2 templates
+ - `scripts/` — loop scripts + setup/run scripts (to be implemented)
+ - `tests/` — pytest suite
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index 7e8e0380aa181cdc4704f5a08306c8c1013566e3..d2f6b05031a3edb4f5771e255f9f2f823a603e59
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -1,4 +1,3 @@
+-from dataclasses import dataclass
+ from datetime import datetime, timezone
+ from pathlib import Path
+ import shutil
+@@ -8,25 +7,28 @@
+ from fastapi.responses import HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
++
+ app = FastAPI(title="Whisper WebUI (MLX)")
+ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+ BASE_DIR = Path(__file__).resolve().parent.parent
+ DEFAULT_UPLOADS_DIR = BASE_DIR / "data" / "uploads"
++DEFAULT_DB_PATH = BASE_DIR / "data" / "jobs.db"
+ app.state.uploads_dir = DEFAULT_UPLOADS_DIR
+-app.state.jobs = []
++app.state.db_path = DEFAULT_DB_PATH
+ 
+ 
+-@dataclass
+-class JobRecord:
+-    id: str
+-    filename: str
+-    status: str
+-    created_at: str
+-    upload_path: str
++@app.on_event("startup")
++def startup() -> None:
++    init_db(get_db_path())
+ 
+ 
+ def get_job_store() -> list[JobRecord]:
+-    return app.state.jobs
++    return list_jobs(get_db_path())
++
++
++def get_db_path() -> Path:
++    return Path(app.state.db_path)
+ 
+ 
+ def get_uploads_dir() -> Path:
+@@ -65,8 +67,8 @@
+ 
+ @app.post("/upload", response_class=HTMLResponse)
+ async def upload_files(request: Request, files: list[UploadFile] = File(...)):
+-    jobs = get_job_store()
+     uploads_dir = ensure_uploads_dir()
++    db_path = get_db_path()
+ 
+     for upload in files:
+         if not upload.filename:
+@@ -81,7 +83,9 @@
+                 shutil.copyfileobj(upload.file, outfile)
+         finally:
+             await upload.close()
+-        jobs.append(new_job_record(job_id, safe_name, destination))
++        insert_job(db_path, new_job_record(job_id, safe_name, destination))
++
++    jobs = list_jobs(db_path)
+ 
+     return templates.TemplateResponse(
+         request,
+diff --git a/mlx_ui/templates/index.html b/mlx_ui/templates/index.html
+index d02c9f89f6d46241bbc89b57bd616f21fa57ddf9..fd98aea99956baf4d5692b9960df62df84cbc6a5
+--- a/mlx_ui/templates/index.html
++++ b/mlx_ui/templates/index.html
+@@ -356,10 +356,24 @@
+           >
+             <h2>History</h2>
+             <p>Completed jobs will appear here with download links.</p>
+-            <div class="placeholder">
+-              <div class="placeholder-row">No completed jobs yet.</div>
+-              <div class="placeholder-row">Check back after a run.</div>
+-            </div>
++            {% if jobs %}
++              <div class="job-list" aria-live="polite">
++                {% for job in jobs %}
++                  <div class="job-row">
++                    <div>
++                      <div class="job-name">{{ job.filename }}</div>
++                      <div class="job-meta">Added {{ job.created_at }}</div>
++                    </div>
++                    <div class="job-status">{{ job.status }}</div>
++                  </div>
++                {% endfor %}
++              </div>
++            {% else %}
++              <div class="placeholder">
++                <div class="placeholder-row">No completed jobs yet.</div>
++                <div class="placeholder-row">Check back after a run.</div>
++              </div>
++            {% endif %}
+           </section>
+         </div>
+       </section>
+
+
+thinking
+**Confirming progress update**
+exec
+/bin/zsh -lc 'tail -n 3 .agent/progress.md' in /Users/ivankhokhlov/code/mlx-ui succeeded in 107ms:
+- 2026-01-21T11:37:21Z — JUDGE — CODEX_ITERATION=5 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
+- 2026-01-21T11:41:40Z — PLANNER — CODEX_ITERATION=6 — selected WUI-011 (Persistent job store (SQLite)). Queue updated (moved WUI-011 to Now).
+- 2026-01-21T11:48:06Z — WORKER — CODEX_ITERATION=6 — WUI-011 — tests: passed (make test); lint: passed (make lint)
+file update:
+diff --git a/docs/tree.md b/docs/tree.md
+index b27a1b2a13b3fb55753c1a7a8078d54ad9bd522b..ae097fb5a436817a904b215724378f37e52aa66a
+--- a/docs/tree.md
++++ b/docs/tree.md
+@@ -4,9 +4,9 @@
+ 
+ ## Current (bootstrap)
+ - `.agent/` — durable loop state + prompts
+-- `data/` — runtime uploads/results/logs (created on demand)
++- `data/` — runtime uploads/results/logs/jobs.db (created on demand)
+ - `docs/` — spec + dev notes + this tree map
+-- `mlx_ui/` — FastAPI app package (see `app.py`)
++- `mlx_ui/` — FastAPI app package (`app.py`, `db.py`)
+ - `mlx_ui/templates/` — Jinja2 templates
+ - `scripts/` — loop scripts + setup/run scripts (to be implemented)
+ - `tests/` — pytest suite
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index 7e8e0380aa181cdc4704f5a08306c8c1013566e3..d2f6b05031a3edb4f5771e255f9f2f823a603e59
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -1,4 +1,3 @@
+-from dataclasses import dataclass
+ from datetime import datetime, timezone
+ from pathlib import Path
+ import shutil
+@@ -8,25 +7,28 @@
+ from fastapi.responses import HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
++
+ app = FastAPI(title="Whisper WebUI (MLX)")
+ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+ BASE_DIR = Path(__file__).resolve().parent.parent
+ DEFAULT_UPLOADS_DIR = BASE_DIR / "data" / "uploads"
++DEFAULT_DB_PATH = BASE_DIR / "data" / "jobs.db"
+ app.state.uploads_dir = DEFAULT_UPLOADS_DIR
+-app.state.jobs = []
++app.state.db_path = DEFAULT_DB_PATH
+ 
+ 
+-@dataclass
+-class JobRecord:
+-    id: str
+-    filename: str
+-    status: str
+-    created_at: str
+-    upload_path: str
++@app.on_event("startup")
++def startup() -> None:
++    init_db(get_db_path())
+ 
+ 
+ def get_job_store() -> list[JobRecord]:
+-    return app.state.jobs
++    return list_jobs(get_db_path())
++
++
++def get_db_path() -> Path:
++    return Path(app.state.db_path)
+ 
+ 
+ def get_uploads_dir() -> Path:
+@@ -65,8 +67,8 @@
+ 
+ @app.post("/upload", response_class=HTMLResponse)
+ async def upload_files(request: Request, files: list[UploadFile] = File(...)):
+-    jobs = get_job_store()
+     uploads_dir = ensure_uploads_dir()
++    db_path = get_db_path()
+ 
+     for upload in files:
+         if not upload.filename:
+@@ -81,7 +83,9 @@
+                 shutil.copyfileobj(upload.file, outfile)
+         finally:
+             await upload.close()
+-        jobs.append(new_job_record(job_id, safe_name, destination))
++        insert_job(db_path, new_job_record(job_id, safe_name, destination))
++
++    jobs = list_jobs(db_path)
+ 
+     return templates.TemplateResponse(
+         request,
+diff --git a/mlx_ui/templates/index.html b/mlx_ui/templates/index.html
+index d02c9f89f6d46241bbc89b57bd616f21fa57ddf9..fd98aea99956baf4d5692b9960df62df84cbc6a5
+--- a/mlx_ui/templates/index.html
++++ b/mlx_ui/templates/index.html
+@@ -356,10 +356,24 @@
+           >
+             <h2>History</h2>
+             <p>Completed jobs will appear here with download links.</p>
+-            <div class="placeholder">
+-              <div class="placeholder-row">No completed jobs yet.</div>
+-              <div class="placeholder-row">Check back after a run.</div>
+-            </div>
++            {% if jobs %}
++              <div class="job-list" aria-live="polite">
++                {% for job in jobs %}
++                  <div class="job-row">
++                    <div>
++                      <div class="job-name">{{ job.filename }}</div>
++                      <div class="job-meta">Added {{ job.created_at }}</div>
++                    </div>
++                    <div class="job-status">{{ job.status }}</div>
++                  </div>
++                {% endfor %}
++              </div>
++            {% else %}
++              <div class="placeholder">
++                <div class="placeholder-row">No completed jobs yet.</div>
++                <div class="placeholder-row">Check back after a run.</div>
++              </div>
++            {% endif %}
+           </section>
+         </div>
+       </section>
+
+
+
+thinking
+**Preparing final concise summary**
+
+I'm crafting a brief summary covering the SQLite-backed job persistence implementation, test results, and references to `.agent/worker_report.md` plus relevant logs, including a natural next step suggestion.
+thinking
+**Finalizing concise bullet summary**
+
+I'm structuring the final message as a brief bullet list covering the implementation overview, test results, report/log file references, and a clear next step to run and verify the persisted job queue after restart.
+codex
+Added a SQLite-backed job store so queued jobs persist across restarts and render in both Queue and History; DB helpers live in `mlx_ui/db.py` with wiring/template/test updates in `mlx_ui/app.py`, `mlx_ui/templates/index.html`, `tests/test_app.py`, and the tree map in `docs/tree.md`.
+Tests: `make test` (pass), `make lint` (pass).
+Reports/logs: `.agent/worker_report.md`, `.agent/logs/test_6.log`, `.agent/logs/lint_6.log`.
+Next step: run `make run` and confirm Queue/History show persisted jobs after restarting the server.
+file update:
+diff --git a/docs/tree.md b/docs/tree.md
+index b27a1b2a13b3fb55753c1a7a8078d54ad9bd522b..ae097fb5a436817a904b215724378f37e52aa66a
+--- a/docs/tree.md
++++ b/docs/tree.md
+@@ -4,9 +4,9 @@
+ 
+ ## Current (bootstrap)
+ - `.agent/` — durable loop state + prompts
+-- `data/` — runtime uploads/results/logs (created on demand)
++- `data/` — runtime uploads/results/logs/jobs.db (created on demand)
+ - `docs/` — spec + dev notes + this tree map
+-- `mlx_ui/` — FastAPI app package (see `app.py`)
++- `mlx_ui/` — FastAPI app package (`app.py`, `db.py`)
+ - `mlx_ui/templates/` — Jinja2 templates
+ - `scripts/` — loop scripts + setup/run scripts (to be implemented)
+ - `tests/` — pytest suite
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index 7e8e0380aa181cdc4704f5a08306c8c1013566e3..d2f6b05031a3edb4f5771e255f9f2f823a603e59
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -1,4 +1,3 @@
+-from dataclasses import dataclass
+ from datetime import datetime, timezone
+ from pathlib import Path
+ import shutil
+@@ -8,25 +7,28 @@
+ from fastapi.responses import HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
++
+ app = FastAPI(title="Whisper WebUI (MLX)")
+ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+ BASE_DIR = Path(__file__).resolve().parent.parent
+ DEFAULT_UPLOADS_DIR = BASE_DIR / "data" / "uploads"
++DEFAULT_DB_PATH = BASE_DIR / "data" / "jobs.db"
+ app.state.uploads_dir = DEFAULT_UPLOADS_DIR
+-app.state.jobs = []
++app.state.db_path = DEFAULT_DB_PATH
+ 
+ 
+-@dataclass
+-class JobRecord:
+-    id: str
+-    filename: str
+-    status: str
+-    created_at: str
+-    upload_path: str
++@app.on_event("startup")
++def startup() -> None:
++    init_db(get_db_path())
+ 
+ 
+ def get_job_store() -> list[JobRecord]:
+-    return app.state.jobs
++    return list_jobs(get_db_path())
++
++
++def get_db_path() -> Path:
++    return Path(app.state.db_path)
+ 
+ 
+ def get_uploads_dir() -> Path:
+@@ -65,8 +67,8 @@
+ 
+ @app.post("/upload", response_class=HTMLResponse)
+ async def upload_files(request: Request, files: list[UploadFile] = File(...)):
+-    jobs = get_job_store()
+     uploads_dir = ensure_uploads_dir()
++    db_path = get_db_path()
+ 
+     for upload in files:
+         if not upload.filename:
+@@ -81,7 +83,9 @@
+                 shutil.copyfileobj(upload.file, outfile)
+         finally:
+             await upload.close()
+-        jobs.append(new_job_record(job_id, safe_name, destination))
++        insert_job(db_path, new_job_record(job_id, safe_name, destination))
++
++    jobs = list_jobs(db_path)
+ 
+     return templates.TemplateResponse(
+         request,
+diff --git a/mlx_ui/templates/index.html b/mlx_ui/templates/index.html
+index d02c9f89f6d46241bbc89b57bd616f21fa57ddf9..fd98aea99956baf4d5692b9960df62df84cbc6a5
+--- a/mlx_ui/templates/index.html
++++ b/mlx_ui/templates/index.html
+@@ -356,10 +356,24 @@
+           >
+             <h2>History</h2>
+             <p>Completed jobs will appear here with download links.</p>
+-            <div class="placeholder">
+-              <div class="placeholder-row">No completed jobs yet.</div>
+-              <div class="placeholder-row">Check back after a run.</div>
+-            </div>
++            {% if jobs %}
++              <div class="job-list" aria-live="polite">
++                {% for job in jobs %}
++                  <div class="job-row">
++                    <div>
++                      <div class="job-name">{{ job.filename }}</div>
++                      <div class="job-meta">Added {{ job.created_at }}</div>
++                    </div>
++                    <div class="job-status">{{ job.status }}</div>
++                  </div>
++                {% endfor %}
++              </div>
++            {% else %}
++              <div class="placeholder">
++                <div class="placeholder-row">No completed jobs yet.</div>
++                <div class="placeholder-row">Check back after a run.</div>
++              </div>
++            {% endif %}
+           </section>
+         </div>
+       </section>
+
+tokens used
+48,714

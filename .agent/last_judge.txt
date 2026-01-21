@@ -1,10 +1,9 @@
-- Verdict: PASS — WUI-010 acceptance met (multi-file upload saves to data/uploads and creates jobs).
-- Tests: `make test` (pass, rerun).
-- Lint: `make lint` (not rerun; worker reported pass).
-- Acceptance check: `/upload` accepts multiple files and job records render in Queue UI.
-- Queue: WUI-010 moved to Done.
-- Next task: WUI-011 — Persistent job store (SQLite).
-- State updated: `.agent/state.md` (last_task_id=WUI-010, failures=0).
-- Feedback: `.agent/judge_feedback.md`.
-- Progress log: `.agent/progress.md` appended (CODEX_ITERATION=5).
-- Commit: `WUI-010: Upload endpoint + local storage`.
+- Verdict: PASS — WUI-011 acceptance met (jobs persist across restarts; History lists prior jobs).
+- Tests: `make test` passed (rerun).
+- Lint: not rerun; worker reported `make lint` pass.
+- Acceptance check: Queue/History render persisted jobs from SQLite after restart.
+- State updated in `.agent/state.md` (last_task_id=WUI-011, failures=0).
+- Queue updated: WUI-011 moved to Done; next task is WUI-012.
+- Feedback written to `.agent/judge_feedback.md`.
+- Progress appended in `.agent/progress.md` (CODEX_ITERATION=6).
+- Commit created: `WUI-011: Persistent job store (SQLite)`.
