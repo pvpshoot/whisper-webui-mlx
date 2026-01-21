@@ -1,0 +1,4557 @@
+OpenAI Codex v0.87.0 (research preview)
+--------
+workdir: /Users/ivankhokhlov/code/mlx-ui/.
+model: gpt-5.2-codex
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: xhigh
+reasoning summaries: auto
+session id: 019be089-81a5-79f3-812f-4c48e34fa28c
+--------
+user
+# WORKER AGENT (3-phase harness)
+
+You are the WORKER in a Planner→Worker→Judge pipeline.
+Your job: execute `.agent/plan.md` as written, with minimal scope creep.
+
+Non-interactive run (`codex exec`): do not ask questions. If unclear, make the smallest reasonable assumption and log it.
+
+## Stop conditions
+- If `.agent/STOP` exists: append “STOP seen” to `.agent/progress.md` and exit.
+- If `.agent/DONE` exists: append “DONE seen” to `.agent/progress.md` and exit.
+
+## Inputs you MUST read
+- `.agent/PROJECT.md` (authoritative; includes TEST_CMD/LINT_CMD)
+- `AGENTS.md` (repo rules)
+- `docs/spec.md`
+- `docs/dev.md` (if exists)
+- `.agent/plan.md`
+- `.agent/judge_feedback.md` (if present)
+- `.agent/queue.md`
+- `.agent/progress.md`
+- `.agent/state.md`
+
+## Core rules
+- Implement ONLY the single task in `.agent/plan.md`.
+- Do NOT mark tasks done in `.agent/queue.md` (Judge owns that).
+- Prefer small, coherent changes. No big refactors unless the task explicitly requires it.
+- All network-dependent logic must be best-effort with timeouts and exception handling.
+- Bind server to localhost only.
+- Queue must be strictly sequential: one job at a time; no parallel transcription runs.
+- Never print secrets. If you need to log config, mask tokens.
+
+## Logging
+Ensure `.agent/logs/` exists.
+Write/overwrite `.agent/worker_report.md` with:
+- task id/title
+- what changed (bullets)
+- files changed (list)
+- commands run + result (pass/fail)
+- if failure: include a short excerpt of the error and what you think is next
+
+Also append a WORKER entry to `.agent/progress.md` with:
+- timestamp
+- CODEX_ITERATION
+- task id
+- test + lint status summary
+
+## Verification (must do)
+Run TEST_CMD (from PROJECT.md). Capture output into a file.
+
+Tip: to preserve exit codes with tee:
+- use: `bash -lc "set -o pipefail; <TEST_CMD> 2>&1 | tee .agent/logs/test_${CODEX_ITERATION}.log"`
+
+If LINT_CMD is set and command exists, run similarly and capture output:
+- `.agent/logs/lint_${CODEX_ITERATION}.log`
+
+If tests fail and you cannot fix quickly:
+- write/update `.agent/BLOCKED.md` with exact errors + next steps
+- exit (do not thrash)
+
+## Output
+Print a short summary:
+- what you implemented
+- test status
+- pointers to worker_report + log files
+
+mcp startup: no servers
+
+thinking
+**Listing files to check progress**
+exec
+/bin/zsh -lc ls in /Users/ivankhokhlov/code/mlx-ui succeeded in 72ms:
+AGENTS.md
+Makefile
+README.md
+data
+docs
+mlx_ui
+poetry.lock
+pyproject.toml
+scripts
+tests
+
+thinking
+**Checking .agent presence**
+exec
+/bin/zsh -lc 'ls -a' in /Users/ivankhokhlov/code/mlx-ui succeeded in 60ms:
+.
+..
+.DS_Store
+.agent
+.git
+.gitignore
+.pytest_cache
+.python-version
+.ruff_cache
+.venv
+AGENTS.md
+Makefile
+README.md
+data
+docs
+mlx_ui
+poetry.lock
+pyproject.toml
+scripts
+tests
+exec
+/bin/zsh -lc 'ls .agent' in /Users/ivankhokhlov/code/mlx-ui succeeded in 64ms:
+BLOCKED.md
+PROJECT.md
+judge.md
+judge_feedback.md
+last_judge.txt
+last_planner.txt
+last_worker.txt
+logs
+plan.md
+planner.md
+progress.md
+queue.md
+state.md
+worker.md
+worker_report.md
+
+thinking
+**Confirming input files to read**
+
+I'm preparing to read designated input files inside the repo using sequential cat commands, ensuring no external files are touched.
+exec
+/bin/zsh -lc 'cat .agent/PROJECT.md' in /Users/ivankhokhlov/code/mlx-ui succeeded in 73ms:
+# PROJECT (single source of truth for the harness)
+
+PROJECT_NAME: "whisper-webui-mlx"
+REPO_KIND: "new repo"
+
+## Brief (1–2 paragraphs)
+Build a **local macOS app for Apple Silicon (M1+)** that exposes a **Web UI on localhost** to manage **offline transcription** of audio/video files using the engine from `whisper-turbo-mlx` via its CLI `wtm` (MLX). https://github.com/JosefAlbers/whisper-turbo-mlx
+
+Turn the current console workflow (e.g. `wtm ... --any_lang=True`) into a tool that is easy to deploy on another M1+ Mac with **one command**, supports **batch uploads**, a **strictly sequential** processing queue (no parallelism), **job history + downloads**, optional **Telegram delivery of TXT results**, and (in the final phase) **live recording + chunked transcription**.
+
+## Primary stack
+Python 3.11+
+- Backend/Web: FastAPI + Uvicorn
+- Templates/UI: Jinja2 + minimal vanilla JS (no external CDNs; must work offline)
+- Storage: SQLite (jobs metadata) + local filesystem (uploads/results/logs)
+- Worker: a single sequential worker consuming a persistent queue
+- Transcription: subprocess call to `wtm` with explicit language selection
+
+## Commands (choose defaults if unknown)
+TEST_CMD: "make test"
+
+thinking
+**Checking for existing AGENTS.md**
+exec
+/bin/zsh -lc 'cat AGENTS.md' in /Users/ivankhokhlov/code/mlx-ui succeeded in 66ms:
+# AGENTS.md
+
+This repo is developed using an autonomous loop (Planner → Worker → Judge) driven by `codex exec`.
+Because each run starts with limited context, **durable state MUST be stored in `.agent/`**.
+
+## Source of truth
+- `.agent/PROJECT.md` — high-level constraints and commands
+- `docs/spec.md` — product requirements
+- `.agent/queue.md` — backlog (Judge marks tasks done)
+
+## How to run
+- Tests: `make test`
+- Lint: `make lint`
+- Format: `make fmt`
+- Run server: `make run`
+
+If Makefile does not exist yet, create it during bootstrap.
+
+## Safety / security rules
+- Never touch anything outside the repo root.
+
+thinking
+**Identifying missing documentation**
+
+The repository lacks a docs/spec.md file, which is needed for reference or specification.
+exec
+/bin/zsh -lc 'cat docs/spec.md' in /Users/ivankhokhlov/code/mlx-ui succeeded in 67ms:
+# Spec — whisper-webui-mlx
+
+## Goal
+Create a **local-only** tool for **macOS Apple Silicon (M1+)** that provides a **Web UI on localhost** to manage **local transcription** of audio/video files using the engine from `whisper-turbo-mlx` via its CLI `wtm` (MLX).
+
+The tool must be easy to deploy to another M1+ Mac (one command), and after the initial setup + model download it must work **fully offline**.
+
+## MVP: Batch file transcription via Web UI
+### UX
+- User opens Web UI (localhost).
+- User uploads **one or multiple files** (audio or video).
+- User selects the **language manually** (no auto-detect).
+- Files are placed into a **queue** and processed **strictly sequentially** (no parallel jobs).
+- UI has:
+  - Queue view: current job + pending jobs
+  - History view: completed jobs + access to results
+
+### Processing rules
+- One worker processes one job at a time (sequential).
+- Keep the ML model “warm” behavior in mind: avoid parallelism and avoid reinitialization churn.
+
+thinking
+**Checking for docs/dev.md**
+exec
+/bin/zsh -lc 'ls docs' in /Users/ivankhokhlov/code/mlx-ui succeeded in 86ms:
+dev.md
+spec.md
+tree.md
+
+thinking
+**Reviewing development documentation**
+exec
+/bin/zsh -lc 'cat docs/dev.md' in /Users/ivankhokhlov/code/mlx-ui succeeded in 74ms:
+# Developer guide
+
+## Requirements (target)
+- macOS Apple Silicon (M1+)
+- Python 3.11+
+- Homebrew (for system deps like ffmpeg)
+
+## Quick start (eventual)
+```bash
+./scripts/setup_and_run.sh
+```
+
+## Manual dev loop
+```bash
+poetry install --with dev
+
+make test
+make run
+```
+
+
+thinking
+**Adding missing plan file**
+exec
+/bin/zsh -lc 'cat .agent/plan.md' in /Users/ivankhokhlov/code/mlx-ui succeeded in 79ms:
+# Plan
+
+Task: WUI-021 — Results browsing + download
+
+Acceptance: history page shows per-job links to view/download TXT and other generated formats
+
+Assumptions:
+- Results live under `data/results/<job_id>/` and are safe to expose via file download routes.
+- Job history already exists and includes job IDs that map to results directories.
+
+Implementation steps:
+- Review current history rendering in `mlx_ui/templates/index.html` and job metadata access in `mlx_ui/app.py` to confirm what fields are available per job.
+- Add a helper to list result files for a job by scanning `data/results/<job_id>/`, filtering non-files, and sorting deterministically.
+- Add a download/view endpoint (e.g., `/results/{job_id}/{filename}`) using `FileResponse`, with path traversal protection and 404 for missing files.
+- Update the History section in the template to show per-job lists of result links (TXT emphasized) and a “no results yet” fallback.
+- Extend tests to create fake result files and assert history renders links and download endpoints return file content.
+
+Files likely to touch:
+- `mlx_ui/app.py`
+- `mlx_ui/templates/index.html`
+
+thinking
+**Identifying need for judge feedback**
+
+I'm noting a possible requirement for judge feedback and planning to investigate further.
+exec
+/bin/zsh -lc 'cat .agent/judge_feedback.md' in /Users/ivankhokhlov/code/mlx-ui succeeded in 68ms:
+PASS
+
+Notes:
+- `make test` passes (rerun).
+- `make lint` not rerun; worker reported pass.
+- Acceptance criteria met for WUI-020.
+
+thinking
+**Identifying state and progress needs**
+exec
+/bin/zsh -lc 'cat .agent/queue.md' in /Users/ivankhokhlov/code/mlx-ui succeeded in 67ms:
+# Queue
+
+## Now
+- [ ] WUI-021 — Results browsing + download (acceptance: history page shows per-job links to view/download TXT and other generated formats)
+
+## Next
+
+## Later
+- [ ] WUI-030 — One-command setup & run on M1+ macOS (acceptance: `./scripts/setup_and_run.sh` installs deps, downloads models, starts server, and opens browser)
+- [ ] WUI-040 — Telegram delivery (acceptance: when env vars are set, send TXT + message; failures do not break pipeline; secrets masked)
+- [ ] WUI-050 — Update check at startup (acceptance: if online, checks for updates with timeout; if offline, no errors and app works)
+- [ ] WUI-090 — Live mode skeleton (acceptance: UI has “Live” page stub + technical plan in docs; no implementation yet)
+
+## Done
+- [x] WUI-020 — Integrate `wtm` CLI transcription (acceptance: for a job, system runs `wtm` with chosen language and produces at least `.txt` in `data/results/<job_id>/`)
+- [x] WUI-012 — Sequential worker + fake transcriber (acceptance: single worker processes jobs strictly one-at-a-time; tests do not require ML model)
+- [x] WUI-011 — Persistent job store (SQLite) (acceptance: jobs survive server restart; history page lists prior jobs)
+- [x] WUI-010 — Upload endpoint + local storage (acceptance: user can upload multiple files; files saved under `data/uploads/` and jobs are created)
+- [x] WUI-002 — Minimal WebUI shell (acceptance: localhost page renders with tabs: Queue + History, using server-side templates)
+- [x] WUI-001A — Fix pytest availability for `make test` (acceptance: `make test` succeeds in a clean env by ensuring pytest is installed or Makefile uses Poetry/venv)
+exec
+/bin/zsh -lc 'cat .agent/progress.md' in /Users/ivankhokhlov/code/mlx-ui succeeded in 88ms:
+# Progress Log (append-only)
+
+- 2026-01-21T09:49:08 — INIT — Harness files created. Next: run the 3-phase loop.
+- 2026-01-21T10:33:08Z — PLANNER — CODEX_ITERATION=1 — selected WUI-001 (Bootstrap repo skeleton). Queue unchanged.
+- 2026-01-21T10:37:23Z — WORKER — CODEX_ITERATION=1 — WUI-001 — tests: failed (pytest missing); lint: not run
+- 2026-01-21T10:39:53Z — JUDGE — CODEX_ITERATION=1 — NEEDS_WORK — make test failed (pytest missing in venv); tests: failed (make test)
+- 2026-01-21T10:42:24Z — PLANNER — CODEX_ITERATION=2 — selected WUI-001A (Fix pytest availability for `make test`). Queue updated (format fix for WUI-001A).
+- 2026-01-21T10:49:11Z — WORKER — CODEX_ITERATION=2 — WUI-001A — tests: passed (make test); lint: passed (make lint)
+- 2026-01-21T10:52:47Z — JUDGE — CODEX_ITERATION=2 — PASS — acceptance met; tests: passed (make test); lint: passed (make lint)
+- 2026-01-21T10:56:28Z — PLANNER — CODEX_ITERATION=3 — selected WUI-001 (Bootstrap repo skeleton). Queue unchanged.
+- 2026-01-21T10:58:25Z — WORKER — CODEX_ITERATION=3 — WUI-001 — tests: passed (make test); lint: passed (make lint)
+- 2026-01-21T11:01:51Z — JUDGE — CODEX_ITERATION=3 — PASS — acceptance met; tests: passed (make test); lint: passed (make lint)
+- 2026-01-21T11:05:17Z — PLANNER — CODEX_ITERATION=4 — selected WUI-002 (Minimal WebUI shell). Queue unchanged.
+- 2026-01-21T11:11:48Z — WORKER — CODEX_ITERATION=4 — WUI-002 — tests: passed (make test); lint: passed (make lint)
+- 2026-01-21T11:16:13Z — JUDGE — CODEX_ITERATION=4 — PASS — acceptance met; tests: passed (make test); lint: passed (make lint)
+- 2026-01-21T11:23:27Z — PLANNER — CODEX_ITERATION=5 — selected WUI-010 (Upload endpoint + local storage). Queue updated (moved WUI-010 to Now).
+- 2026-01-21T11:33:16Z — WORKER — CODEX_ITERATION=5 — WUI-010 — tests: passed (make test); lint: passed (make lint)
+- 2026-01-21T11:37:21Z — JUDGE — CODEX_ITERATION=5 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
+- 2026-01-21T11:41:40Z — PLANNER — CODEX_ITERATION=6 — selected WUI-011 (Persistent job store (SQLite)). Queue updated (moved WUI-011 to Now).
+- 2026-01-21T11:48:06Z — WORKER — CODEX_ITERATION=6 — WUI-011 — tests: passed (make test); lint: passed (make lint)
+
+thinking
+**Identifying missing state**
+exec
+/bin/zsh -lc 'cat .agent/state.md' in /Users/ivankhokhlov/code/mlx-ui succeeded in 64ms:
+last_task_id: WUI-020
+last_verdict: PASS
+consecutive_failures: 0
+
+thinking
+**Inspecting results browsing implementation**
+
+I'm opening the main app code, templates, and tests to understand how the WUI-021 results browsing is currently handled.
+exec
+/bin/zsh -lc "sed -n '1,220p' mlx_ui/app.py" in /Users/ivankhokhlov/code/mlx-ui succeeded in 92ms:
+from datetime import datetime, timezone
+from pathlib import Path
+import shutil
+from uuid import uuid4
+
+from fastapi import FastAPI, File, Request, UploadFile
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+
+from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+from mlx_ui.worker import start_worker
+
+app = FastAPI(title="Whisper WebUI (MLX)")
+templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+BASE_DIR = Path(__file__).resolve().parent.parent
+DEFAULT_UPLOADS_DIR = BASE_DIR / "data" / "uploads"
+DEFAULT_RESULTS_DIR = BASE_DIR / "data" / "results"
+DEFAULT_DB_PATH = BASE_DIR / "data" / "jobs.db"
+app.state.uploads_dir = DEFAULT_UPLOADS_DIR
+app.state.results_dir = DEFAULT_RESULTS_DIR
+
+thinking
+**Reviewing job structure in database and worker**
+
+I'm checking the database and worker files to understand how jobs are structured before adding the result list helper and download endpoint.
+exec
+/bin/zsh -lc "sed -n '1,240p' mlx_ui/db.py" in /Users/ivankhokhlov/code/mlx-ui succeeded in 59ms:
+from dataclasses import dataclass
+from pathlib import Path
+import sqlite3
+
+
+@dataclass
+class JobRecord:
+    id: str
+    filename: str
+    status: str
+    created_at: str
+    upload_path: str
+
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS jobs (
+    id TEXT PRIMARY KEY,
+    filename TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+
+thinking
+**Considering worker for result location**
+exec
+/bin/zsh -lc "sed -n '1,240p' mlx_ui/worker.py" in /Users/ivankhokhlov/code/mlx-ui succeeded in 68ms:
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+import threading
+
+from mlx_ui.db import claim_next_job, update_job_status
+from mlx_ui.transcriber import Transcriber, WtmTranscriber
+
+logger = logging.getLogger(__name__)
+
+_worker_lock = threading.Lock()
+_worker_instance: Worker | None = None
+
+
+class Worker:
+    def __init__(
+        self,
+        db_path: Path,
+        results_dir: Path,
+
+thinking
+**Identifying potential results definition**
+
+Noting that the transcriber component may define the results, which could guide where to focus next for understanding data flow or output structure.
+exec
+/bin/zsh -lc "sed -n '1,260p' mlx_ui/transcriber.py" in /Users/ivankhokhlov/code/mlx-ui succeeded in 61ms:
+import logging
+import os
+from pathlib import Path
+import subprocess
+from typing import Protocol
+
+from mlx_ui.db import JobRecord
+
+logger = logging.getLogger(__name__)
+
+
+class Transcriber(Protocol):
+    def transcribe(self, job: JobRecord, results_dir: Path) -> Path:
+        raise NotImplementedError
+
+
+class FakeTranscriber:
+    def transcribe(self, job: JobRecord, results_dir: Path) -> Path:
+        results_dir = Path(results_dir)
+        job_dir = results_dir / job.id
+
+thinking
+**Noting missing language field and template need**
+
+JobRecord lacks a language field, and WtmTranscriber accesses it via getattr. Next, I'll locate or create the required index.html template.
+exec
+/bin/zsh -lc "sed -n '1,240p' mlx_ui/templates/index.html" in /Users/ivankhokhlov/code/mlx-ui succeeded in 64ms:
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Whisper WebUI (MLX)</title>
+    <style>
+      :root {
+        --ink: #1d1b16;
+        --ink-muted: #5d5d5d;
+        --panel: #fff7ee;
+        --accent: #d46a3e;
+        --accent-strong: #8b3f1f;
+        --shadow: 0 24px 60px rgba(29, 27, 22, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+exec
+/bin/zsh -lc "sed -n '240,520p' mlx_ui/templates/index.html" in /Users/ivankhokhlov/code/mlx-ui succeeded in 60ms:
+          flex-direction: column;
+          align-items: flex-start;
+        }
+
+        .tablist {
+          flex-direction: column;
+          align-items: stretch;
+        }
+
+        .upload-actions {
+          flex-direction: column;
+          align-items: stretch;
+        }
+
+        .job-row {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+
+        .status-card {
+
+thinking
+**Noting missing result links**
+
+The current history view only lists jobs without linking to their results; tests related to this live in tests/test_app.py.
+exec
+/bin/zsh -lc "sed -n '1,260p' tests/test_app.py" in /Users/ivankhokhlov/code/mlx-ui succeeded in 55ms:
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+
+from mlx_ui.app import app
+from mlx_ui.db import list_jobs
+
+
+def _configure_app(tmp_path: Path) -> None:
+    app.state.uploads_dir = tmp_path / "uploads"
+    app.state.results_dir = tmp_path / "results"
+    app.state.db_path = tmp_path / "jobs.db"
+    app.state.worker_enabled = False
+
+
+def test_root_ok(tmp_path: Path) -> None:
+    _configure_app(tmp_path)
+    with TestClient(app) as client:
+        response = client.get("/")
+
+
+
+thinking
+**Planning results listing and download**
+
+I'm preparing to add a secure results listing helper that scans specific job folders, a FastAPI route for safe file downloads using path checks, template updates to show result links, and tests that create fake files to verify list rendering and download endpoints.
+thinking
+**Detailing secure file routes and results listing**
+
+I'm defining strict path component checks to prevent traversal, creating a helper to list result files per job safely, and adding a FastAPI route that returns files only if verified within the expected directory. The results will be passed as a dictionary to templates to render per-job result links with separate view and download anchors using standard HTML attributes for safety and usability.
+exec
+/bin/zsh -lc 'rg --files tests' in /Users/ivankhokhlov/code/mlx-ui succeeded in 80ms:
+tests/test_app.py
+tests/test_worker.py
+tests/__init__.py
+tests/test_transcriber.py
+
+thinking
+**Reviewing test coverage for new endpoint**
+
+I'm checking test_worker/test_transcriber to see if new tests are needed for added functions and considering if test_app or FakeTranscriber tests require updates.
+exec
+/bin/zsh -lc "sed -n '1,240p' tests/test_worker.py" in /Users/ivankhokhlov/code/mlx-ui succeeded in 62ms:
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+import threading
+import time
+
+from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+from mlx_ui.worker import start_worker, stop_worker
+
+
+class RecordingTranscriber:
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._active = False
+        self.concurrent_detected = False
+        self.seen: list[str] = []
+
+    def transcribe(self, job: JobRecord, results_dir: Path) -> Path:
+        with self._lock:
+            if self._active:
+                self.concurrent_detected = True
+
+
+thinking
+**Planning multi-file updates and tests**
+
+I'm preparing to add tests for the new endpoint, update the main app to include results_by_job in the context, and create a helper function for shared use. I'll ensure FastAPI uses FileResponse and carefully handle multiple file edits with apply_patch. Tests will be run via the project's make test command with logs captured.
+thinking
+**Designing helper functions and secure download route**
+
+I'm adding helper functions to safely list result files per job and build an index for use in templates, then introducing a secure download endpoint that validates paths to prevent traversal attacks and serves files with FileResponse.
+
+**Extending template and styles for results display**
+
+I'm updating the index template to show each job's results with appropriate CSS for layout and styling, including distinctions for text files and download actions.
+
+**Planning comprehensive tests for results integration**
+
+I'll create tests that insert job data with results files into a temporary database and filesystem, then verify the history page lists result links correctly and that the download endpoint serves files as expected.
+exec
+/bin/zsh -lc 'cat Makefile' in /Users/ivankhokhlov/code/mlx-ui succeeded in 72ms:
+PYTHON ?= python
+POETRY ?= poetry
+POETRY_RUN ?= $(POETRY) run
+
+.PHONY: test lint fmt run
+
+test:
+	$(POETRY_RUN) pytest
+
+lint:
+	$(POETRY_RUN) ruff check .
+
+fmt:
+	$(POETRY_RUN) ruff format .
+
+run:
+	$(POETRY_RUN) uvicorn mlx_ui.app:app --host 127.0.0.1 --port 8000
+
+thinking
+**Implementing patch application**
+file update
+M /Users/ivankhokhlov/code/mlx-ui/./mlx_ui/app.py
+@@ -5,4 +5,4 @@
+ 
+-from fastapi import FastAPI, File, Request, UploadFile
+-from fastapi.responses import HTMLResponse
++from fastapi import FastAPI, File, HTTPException, Request, UploadFile
++from fastapi.responses import FileResponse, HTMLResponse
+ from fastapi.templating import Jinja2Templates
+@@ -53,2 +53,6 @@
+ 
++def is_safe_path_component(value: str) -> bool:
++    return value not in {"", ".", ".."} and Path(value).name == value
++
++
+ def sanitize_filename(filename: str) -> str:
+@@ -58,2 +62,15 @@
+ 
++def list_result_files(job_id: str) -> list[str]:
++    if not is_safe_path_component(job_id):
++        return []
++    job_dir = get_results_dir() / job_id
++    if not job_dir.is_dir():
++        return []
++    return sorted(path.name for path in job_dir.iterdir() if path.is_file())
++
++
++def build_results_index(jobs: list[JobRecord]) -> dict[str, list[str]]:
++    return {job.id: list_result_files(job.id) for job in jobs}
++
++
+ def new_job_record(job_id: str, filename: str, upload_path: Path) -> JobRecord:
+@@ -70,2 +87,3 @@
+ def read_root(request: Request):
++    jobs = get_job_store()
+     return templates.TemplateResponse(
+@@ -73,3 +91,3 @@
+         "index.html",
+-        {"jobs": get_job_store()},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
+@@ -102,3 +120,18 @@
+         "index.html",
+-        {"jobs": jobs},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
++
++
++@app.get("/results/{job_id}/{filename}")
++def download_result(job_id: str, filename: str):
++    if not is_safe_path_component(job_id) or not is_safe_path_component(filename):
++        raise HTTPException(status_code=404)
++
++    job_dir = get_results_dir() / job_id
++    job_dir_resolved = job_dir.resolve()
++    file_path = (job_dir / filename).resolve()
++
++    if not file_path.is_file() or not file_path.is_relative_to(job_dir_resolved):
++        raise HTTPException(status_code=404)
++
++    return FileResponse(file_path)
+apply_patch(auto_approved=true) exited 0 in 14ms:
+Success. Updated the following files:
+M mlx_ui/app.py
+file update:
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index e18dd9889a4ce96fc96cd5ef7bd2ef082b84d27d..7714e63faba34a34ea061a1568aad53d97599b55
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -3,8 +3,8 @@
+ import shutil
+ from uuid import uuid4
+ 
+-from fastapi import FastAPI, File, Request, UploadFile
+-from fastapi.responses import HTMLResponse
++from fastapi import FastAPI, File, HTTPException, Request, UploadFile
++from fastapi.responses import FileResponse, HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
+ from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+@@ -51,11 +51,28 @@
+     return uploads_dir
+ 
+ 
++def is_safe_path_component(value: str) -> bool:
++    return value not in {"", ".", ".."} and Path(value).name == value
++
++
+ def sanitize_filename(filename: str) -> str:
+     safe_name = Path(filename).name
+     return safe_name or "upload.bin"
+ 
+ 
++def list_result_files(job_id: str) -> list[str]:
++    if not is_safe_path_component(job_id):
++        return []
++    job_dir = get_results_dir() / job_id
++    if not job_dir.is_dir():
++        return []
++    return sorted(path.name for path in job_dir.iterdir() if path.is_file())
++
++
++def build_results_index(jobs: list[JobRecord]) -> dict[str, list[str]]:
++    return {job.id: list_result_files(job.id) for job in jobs}
++
++
+ def new_job_record(job_id: str, filename: str, upload_path: Path) -> JobRecord:
+     return JobRecord(
+         id=job_id,
+@@ -68,10 +85,11 @@
+ 
+ @app.get("/", response_class=HTMLResponse)
+ def read_root(request: Request):
++    jobs = get_job_store()
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": get_job_store()},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
+ 
+ 
+@@ -100,5 +118,20 @@
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": jobs},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
++
++
++@app.get("/results/{job_id}/{filename}")
++def download_result(job_id: str, filename: str):
++    if not is_safe_path_component(job_id) or not is_safe_path_component(filename):
++        raise HTTPException(status_code=404)
++
++    job_dir = get_results_dir() / job_id
++    job_dir_resolved = job_dir.resolve()
++    file_path = (job_dir / filename).resolve()
++
++    if not file_path.is_file() or not file_path.is_relative_to(job_dir_resolved):
++        raise HTTPException(status_code=404)
++
++    return FileResponse(file_path)
+
+file update:
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index e18dd9889a4ce96fc96cd5ef7bd2ef082b84d27d..7714e63faba34a34ea061a1568aad53d97599b55
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -3,8 +3,8 @@
+ import shutil
+ from uuid import uuid4
+ 
+-from fastapi import FastAPI, File, Request, UploadFile
+-from fastapi.responses import HTMLResponse
++from fastapi import FastAPI, File, HTTPException, Request, UploadFile
++from fastapi.responses import FileResponse, HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
+ from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+@@ -51,11 +51,28 @@
+     return uploads_dir
+ 
+ 
++def is_safe_path_component(value: str) -> bool:
++    return value not in {"", ".", ".."} and Path(value).name == value
++
++
+ def sanitize_filename(filename: str) -> str:
+     safe_name = Path(filename).name
+     return safe_name or "upload.bin"
+ 
+ 
++def list_result_files(job_id: str) -> list[str]:
++    if not is_safe_path_component(job_id):
++        return []
++    job_dir = get_results_dir() / job_id
++    if not job_dir.is_dir():
++        return []
++    return sorted(path.name for path in job_dir.iterdir() if path.is_file())
++
++
++def build_results_index(jobs: list[JobRecord]) -> dict[str, list[str]]:
++    return {job.id: list_result_files(job.id) for job in jobs}
++
++
+ def new_job_record(job_id: str, filename: str, upload_path: Path) -> JobRecord:
+     return JobRecord(
+         id=job_id,
+@@ -68,10 +85,11 @@
+ 
+ @app.get("/", response_class=HTMLResponse)
+ def read_root(request: Request):
++    jobs = get_job_store()
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": get_job_store()},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
+ 
+ 
+@@ -100,5 +118,20 @@
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": jobs},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
++
++
++@app.get("/results/{job_id}/{filename}")
++def download_result(job_id: str, filename: str):
++    if not is_safe_path_component(job_id) or not is_safe_path_component(filename):
++        raise HTTPException(status_code=404)
++
++    job_dir = get_results_dir() / job_id
++    job_dir_resolved = job_dir.resolve()
++    file_path = (job_dir / filename).resolve()
++
++    if not file_path.is_file() or not file_path.is_relative_to(job_dir_resolved):
++        raise HTTPException(status_code=404)
++
++    return FileResponse(file_path)
+
+
+
+thinking
+**Verifying path resolution behavior**
+
+Confirmed that Path.resolve uses strict=False by default since Python 3.9, so it won't raise if the path doesn't exist. Also verified that is_relative_to returns False rather than raising for non-relative paths, so no need for exception handling there.
+thinking
+**Planning CSS insertion point**
+
+Decided to insert the new CSS block near `.job-status`, either after it or before `.placeholder`, and will apply it via a patch.
+file update
+M /Users/ivankhokhlov/code/mlx-ui/./mlx_ui/templates/index.html
+@@ -217,2 +217,62 @@
+ 
++      .results {
++        margin-top: 10px;
++      }
++
++      .result-label {
++        font-size: 0.7rem;
++        text-transform: uppercase;
++        letter-spacing: 0.12em;
++        color: var(--accent-strong);
++      }
++
++      .result-list {
++        list-style: none;
++        margin: 6px 0 0;
++        padding: 0;
++        display: grid;
++        gap: 6px;
++      }
++
++      .result-item {
++        display: flex;
++        align-items: center;
++        gap: 10px;
++        flex-wrap: wrap;
++      }
++
++      .result-link {
++        color: var(--accent-strong);
++        text-decoration: none;
++        font-weight: 600;
++      }
++
++      .result-link:hover {
++        text-decoration: underline;
++      }
++
++      .result-link.is-text {
++        color: var(--accent);
++      }
++
++      .result-action {
++        font-size: 0.78rem;
++        color: var(--ink-muted);
++        text-decoration: none;
++        border: 1px solid #f1e2d2;
++        padding: 2px 8px;
++        border-radius: 999px;
++      }
++
++      .result-action:hover {
++        color: var(--accent-strong);
++        border-color: var(--accent);
++      }
++
++      .result-empty {
++        margin-top: 6px;
++        font-size: 0.85rem;
++        color: var(--ink-muted);
++      }
++
+       .placeholder {
+@@ -365,2 +425,31 @@
+                       <div class="job-meta">Added {{ job.created_at }}</div>
++                      <div class="results">
++                        <div class="result-label">Results</div>
++                        {% set results = results_by_job.get(job.id, []) %}
++                        {% if results %}
++                          <ul class="result-list">
++                            {% for result in results %}
++                              <li class="result-item">
++                                <a
++                                  class="result-link{% if result.endswith('.txt') %} is-text{% endif %}"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  target="_blank"
++                                  rel="noopener"
++                                >
++                                  {{ result }}
++                                </a>
++                                <a
++                                  class="result-action"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  download="{{ result }}"
++                                >
++                                  Download
++                                </a>
++                              </li>
++                            {% endfor %}
++                          </ul>
++                        {% else %}
++                          <div class="result-empty">No results yet.</div>
++                        {% endif %}
++                      </div>
+                     </div>
+apply_patch(auto_approved=true) exited 0 in 21ms:
+Success. Updated the following files:
+M mlx_ui/templates/index.html
+file update:
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index e18dd9889a4ce96fc96cd5ef7bd2ef082b84d27d..7714e63faba34a34ea061a1568aad53d97599b55
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -3,8 +3,8 @@
+ import shutil
+ from uuid import uuid4
+ 
+-from fastapi import FastAPI, File, Request, UploadFile
+-from fastapi.responses import HTMLResponse
++from fastapi import FastAPI, File, HTTPException, Request, UploadFile
++from fastapi.responses import FileResponse, HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
+ from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+@@ -51,11 +51,28 @@
+     return uploads_dir
+ 
+ 
++def is_safe_path_component(value: str) -> bool:
++    return value not in {"", ".", ".."} and Path(value).name == value
++
++
+ def sanitize_filename(filename: str) -> str:
+     safe_name = Path(filename).name
+     return safe_name or "upload.bin"
+ 
+ 
++def list_result_files(job_id: str) -> list[str]:
++    if not is_safe_path_component(job_id):
++        return []
++    job_dir = get_results_dir() / job_id
++    if not job_dir.is_dir():
++        return []
++    return sorted(path.name for path in job_dir.iterdir() if path.is_file())
++
++
++def build_results_index(jobs: list[JobRecord]) -> dict[str, list[str]]:
++    return {job.id: list_result_files(job.id) for job in jobs}
++
++
+ def new_job_record(job_id: str, filename: str, upload_path: Path) -> JobRecord:
+     return JobRecord(
+         id=job_id,
+@@ -68,10 +85,11 @@
+ 
+ @app.get("/", response_class=HTMLResponse)
+ def read_root(request: Request):
++    jobs = get_job_store()
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": get_job_store()},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
+ 
+ 
+@@ -100,5 +118,20 @@
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": jobs},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
++
++
++@app.get("/results/{job_id}/{filename}")
++def download_result(job_id: str, filename: str):
++    if not is_safe_path_component(job_id) or not is_safe_path_component(filename):
++        raise HTTPException(status_code=404)
++
++    job_dir = get_results_dir() / job_id
++    job_dir_resolved = job_dir.resolve()
++    file_path = (job_dir / filename).resolve()
++
++    if not file_path.is_file() or not file_path.is_relative_to(job_dir_resolved):
++        raise HTTPException(status_code=404)
++
++    return FileResponse(file_path)
+diff --git a/mlx_ui/templates/index.html b/mlx_ui/templates/index.html
+index fd98aea99956baf4d5692b9960df62df84cbc6a5..6af02f106d99e68b998bd306ba7733a343867dfe
+--- a/mlx_ui/templates/index.html
++++ b/mlx_ui/templates/index.html
+@@ -215,6 +215,66 @@
+         align-self: center;
+       }
+ 
++      .results {
++        margin-top: 10px;
++      }
++
++      .result-label {
++        font-size: 0.7rem;
++        text-transform: uppercase;
++        letter-spacing: 0.12em;
++        color: var(--accent-strong);
++      }
++
++      .result-list {
++        list-style: none;
++        margin: 6px 0 0;
++        padding: 0;
++        display: grid;
++        gap: 6px;
++      }
++
++      .result-item {
++        display: flex;
++        align-items: center;
++        gap: 10px;
++        flex-wrap: wrap;
++      }
++
++      .result-link {
++        color: var(--accent-strong);
++        text-decoration: none;
++        font-weight: 600;
++      }
++
++      .result-link:hover {
++        text-decoration: underline;
++      }
++
++      .result-link.is-text {
++        color: var(--accent);
++      }
++
++      .result-action {
++        font-size: 0.78rem;
++        color: var(--ink-muted);
++        text-decoration: none;
++        border: 1px solid #f1e2d2;
++        padding: 2px 8px;
++        border-radius: 999px;
++      }
++
++      .result-action:hover {
++        color: var(--accent-strong);
++        border-color: var(--accent);
++      }
++
++      .result-empty {
++        margin-top: 6px;
++        font-size: 0.85rem;
++        color: var(--ink-muted);
++      }
++
+       .placeholder {
+         margin-top: 16px;
+         padding-top: 16px;
+@@ -363,6 +423,35 @@
+                     <div>
+                       <div class="job-name">{{ job.filename }}</div>
+                       <div class="job-meta">Added {{ job.created_at }}</div>
++                      <div class="results">
++                        <div class="result-label">Results</div>
++                        {% set results = results_by_job.get(job.id, []) %}
++                        {% if results %}
++                          <ul class="result-list">
++                            {% for result in results %}
++                              <li class="result-item">
++                                <a
++                                  class="result-link{% if result.endswith('.txt') %} is-text{% endif %}"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  target="_blank"
++                                  rel="noopener"
++                                >
++                                  {{ result }}
++                                </a>
++                                <a
++                                  class="result-action"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  download="{{ result }}"
++                                >
++                                  Download
++                                </a>
++                              </li>
++                            {% endfor %}
++                          </ul>
++                        {% else %}
++                          <div class="result-empty">No results yet.</div>
++                        {% endif %}
++                      </div>
+                     </div>
+                     <div class="job-status">{{ job.status }}</div>
+                   </div>
+
+file update:
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index e18dd9889a4ce96fc96cd5ef7bd2ef082b84d27d..7714e63faba34a34ea061a1568aad53d97599b55
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -3,8 +3,8 @@
+ import shutil
+ from uuid import uuid4
+ 
+-from fastapi import FastAPI, File, Request, UploadFile
+-from fastapi.responses import HTMLResponse
++from fastapi import FastAPI, File, HTTPException, Request, UploadFile
++from fastapi.responses import FileResponse, HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
+ from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+@@ -51,11 +51,28 @@
+     return uploads_dir
+ 
+ 
++def is_safe_path_component(value: str) -> bool:
++    return value not in {"", ".", ".."} and Path(value).name == value
++
++
+ def sanitize_filename(filename: str) -> str:
+     safe_name = Path(filename).name
+     return safe_name or "upload.bin"
+ 
+ 
++def list_result_files(job_id: str) -> list[str]:
++    if not is_safe_path_component(job_id):
++        return []
++    job_dir = get_results_dir() / job_id
++    if not job_dir.is_dir():
++        return []
++    return sorted(path.name for path in job_dir.iterdir() if path.is_file())
++
++
++def build_results_index(jobs: list[JobRecord]) -> dict[str, list[str]]:
++    return {job.id: list_result_files(job.id) for job in jobs}
++
++
+ def new_job_record(job_id: str, filename: str, upload_path: Path) -> JobRecord:
+     return JobRecord(
+         id=job_id,
+@@ -68,10 +85,11 @@
+ 
+ @app.get("/", response_class=HTMLResponse)
+ def read_root(request: Request):
++    jobs = get_job_store()
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": get_job_store()},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
+ 
+ 
+@@ -100,5 +118,20 @@
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": jobs},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
++
++
++@app.get("/results/{job_id}/{filename}")
++def download_result(job_id: str, filename: str):
++    if not is_safe_path_component(job_id) or not is_safe_path_component(filename):
++        raise HTTPException(status_code=404)
++
++    job_dir = get_results_dir() / job_id
++    job_dir_resolved = job_dir.resolve()
++    file_path = (job_dir / filename).resolve()
++
++    if not file_path.is_file() or not file_path.is_relative_to(job_dir_resolved):
++        raise HTTPException(status_code=404)
++
++    return FileResponse(file_path)
+diff --git a/mlx_ui/templates/index.html b/mlx_ui/templates/index.html
+index fd98aea99956baf4d5692b9960df62df84cbc6a5..6af02f106d99e68b998bd306ba7733a343867dfe
+--- a/mlx_ui/templates/index.html
++++ b/mlx_ui/templates/index.html
+@@ -215,6 +215,66 @@
+         align-self: center;
+       }
+ 
++      .results {
++        margin-top: 10px;
++      }
++
++      .result-label {
++        font-size: 0.7rem;
++        text-transform: uppercase;
++        letter-spacing: 0.12em;
++        color: var(--accent-strong);
++      }
++
++      .result-list {
++        list-style: none;
++        margin: 6px 0 0;
++        padding: 0;
++        display: grid;
++        gap: 6px;
++      }
++
++      .result-item {
++        display: flex;
++        align-items: center;
++        gap: 10px;
++        flex-wrap: wrap;
++      }
++
++      .result-link {
++        color: var(--accent-strong);
++        text-decoration: none;
++        font-weight: 600;
++      }
++
++      .result-link:hover {
++        text-decoration: underline;
++      }
++
++      .result-link.is-text {
++        color: var(--accent);
++      }
++
++      .result-action {
++        font-size: 0.78rem;
++        color: var(--ink-muted);
++        text-decoration: none;
++        border: 1px solid #f1e2d2;
++        padding: 2px 8px;
++        border-radius: 999px;
++      }
++
++      .result-action:hover {
++        color: var(--accent-strong);
++        border-color: var(--accent);
++      }
++
++      .result-empty {
++        margin-top: 6px;
++        font-size: 0.85rem;
++        color: var(--ink-muted);
++      }
++
+       .placeholder {
+         margin-top: 16px;
+         padding-top: 16px;
+@@ -363,6 +423,35 @@
+                     <div>
+                       <div class="job-name">{{ job.filename }}</div>
+                       <div class="job-meta">Added {{ job.created_at }}</div>
++                      <div class="results">
++                        <div class="result-label">Results</div>
++                        {% set results = results_by_job.get(job.id, []) %}
++                        {% if results %}
++                          <ul class="result-list">
++                            {% for result in results %}
++                              <li class="result-item">
++                                <a
++                                  class="result-link{% if result.endswith('.txt') %} is-text{% endif %}"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  target="_blank"
++                                  rel="noopener"
++                                >
++                                  {{ result }}
++                                </a>
++                                <a
++                                  class="result-action"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  download="{{ result }}"
++                                >
++                                  Download
++                                </a>
++                              </li>
++                            {% endfor %}
++                          </ul>
++                        {% else %}
++                          <div class="result-empty">No results yet.</div>
++                        {% endif %}
++                      </div>
+                     </div>
+                     <div class="job-status">{{ job.status }}</div>
+                   </div>
+
+
+thinking
+**Updating tests with new imports and test cases**
+file update
+M /Users/ivankhokhlov/code/mlx-ui/./tests/test_app.py
+@@ -1 +1,2 @@
++from datetime import datetime, timezone
+ from pathlib import Path
+@@ -5,3 +6,3 @@
+ from mlx_ui.app import app
+-from mlx_ui.db import list_jobs
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+ 
+@@ -64 +65,40 @@
+     assert "alpha.txt" in response.text
++
++
++def test_history_lists_results_and_download_endpoint(tmp_path: Path) -> None:
++    _configure_app(tmp_path)
++    db_path = Path(app.state.db_path)
++    init_db(db_path)
++
++    job_id = "job-123"
++    uploads_dir = Path(app.state.uploads_dir) / job_id
++    uploads_dir.mkdir(parents=True, exist_ok=True)
++    upload_path = uploads_dir / "alpha.txt"
++    upload_path.write_text("data", encoding="utf-8")
++
++    job = JobRecord(
++        id=job_id,
++        filename="alpha.txt",
++        status="done",
++        created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
++        upload_path=str(upload_path),
++    )
++    insert_job(db_path, job)
++
++    results_dir = Path(app.state.results_dir) / job_id
++    results_dir.mkdir(parents=True, exist_ok=True)
++    txt_path = results_dir / "alpha.txt"
++    txt_path.write_text("transcript", encoding="utf-8")
++    srt_path = results_dir / "alpha.srt"
++    srt_path.write_text("subtitles", encoding="utf-8")
++
++    with TestClient(app) as client:
++        response = client.get("/")
++
++        assert response.status_code == 200
++        assert f"/results/{job_id}/alpha.txt" in response.text
++        assert f"/results/{job_id}/alpha.srt" in response.text
++
++        download = client.get(f"/results/{job_id}/alpha.txt")
++        assert download.status_code == 200
++        assert download.text == "transcript"
+apply_patch(auto_approved=true) exited 0 in 32ms:
+Success. Updated the following files:
+M tests/test_app.py
+file update:
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index e18dd9889a4ce96fc96cd5ef7bd2ef082b84d27d..7714e63faba34a34ea061a1568aad53d97599b55
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -3,8 +3,8 @@
+ import shutil
+ from uuid import uuid4
+ 
+-from fastapi import FastAPI, File, Request, UploadFile
+-from fastapi.responses import HTMLResponse
++from fastapi import FastAPI, File, HTTPException, Request, UploadFile
++from fastapi.responses import FileResponse, HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
+ from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+@@ -51,11 +51,28 @@
+     return uploads_dir
+ 
+ 
++def is_safe_path_component(value: str) -> bool:
++    return value not in {"", ".", ".."} and Path(value).name == value
++
++
+ def sanitize_filename(filename: str) -> str:
+     safe_name = Path(filename).name
+     return safe_name or "upload.bin"
+ 
+ 
++def list_result_files(job_id: str) -> list[str]:
++    if not is_safe_path_component(job_id):
++        return []
++    job_dir = get_results_dir() / job_id
++    if not job_dir.is_dir():
++        return []
++    return sorted(path.name for path in job_dir.iterdir() if path.is_file())
++
++
++def build_results_index(jobs: list[JobRecord]) -> dict[str, list[str]]:
++    return {job.id: list_result_files(job.id) for job in jobs}
++
++
+ def new_job_record(job_id: str, filename: str, upload_path: Path) -> JobRecord:
+     return JobRecord(
+         id=job_id,
+@@ -68,10 +85,11 @@
+ 
+ @app.get("/", response_class=HTMLResponse)
+ def read_root(request: Request):
++    jobs = get_job_store()
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": get_job_store()},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
+ 
+ 
+@@ -100,5 +118,20 @@
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": jobs},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
++
++
++@app.get("/results/{job_id}/{filename}")
++def download_result(job_id: str, filename: str):
++    if not is_safe_path_component(job_id) or not is_safe_path_component(filename):
++        raise HTTPException(status_code=404)
++
++    job_dir = get_results_dir() / job_id
++    job_dir_resolved = job_dir.resolve()
++    file_path = (job_dir / filename).resolve()
++
++    if not file_path.is_file() or not file_path.is_relative_to(job_dir_resolved):
++        raise HTTPException(status_code=404)
++
++    return FileResponse(file_path)
+diff --git a/mlx_ui/templates/index.html b/mlx_ui/templates/index.html
+index fd98aea99956baf4d5692b9960df62df84cbc6a5..6af02f106d99e68b998bd306ba7733a343867dfe
+--- a/mlx_ui/templates/index.html
++++ b/mlx_ui/templates/index.html
+@@ -215,6 +215,66 @@
+         align-self: center;
+       }
+ 
++      .results {
++        margin-top: 10px;
++      }
++
++      .result-label {
++        font-size: 0.7rem;
++        text-transform: uppercase;
++        letter-spacing: 0.12em;
++        color: var(--accent-strong);
++      }
++
++      .result-list {
++        list-style: none;
++        margin: 6px 0 0;
++        padding: 0;
++        display: grid;
++        gap: 6px;
++      }
++
++      .result-item {
++        display: flex;
++        align-items: center;
++        gap: 10px;
++        flex-wrap: wrap;
++      }
++
++      .result-link {
++        color: var(--accent-strong);
++        text-decoration: none;
++        font-weight: 600;
++      }
++
++      .result-link:hover {
++        text-decoration: underline;
++      }
++
++      .result-link.is-text {
++        color: var(--accent);
++      }
++
++      .result-action {
++        font-size: 0.78rem;
++        color: var(--ink-muted);
++        text-decoration: none;
++        border: 1px solid #f1e2d2;
++        padding: 2px 8px;
++        border-radius: 999px;
++      }
++
++      .result-action:hover {
++        color: var(--accent-strong);
++        border-color: var(--accent);
++      }
++
++      .result-empty {
++        margin-top: 6px;
++        font-size: 0.85rem;
++        color: var(--ink-muted);
++      }
++
+       .placeholder {
+         margin-top: 16px;
+         padding-top: 16px;
+@@ -363,6 +423,35 @@
+                     <div>
+                       <div class="job-name">{{ job.filename }}</div>
+                       <div class="job-meta">Added {{ job.created_at }}</div>
++                      <div class="results">
++                        <div class="result-label">Results</div>
++                        {% set results = results_by_job.get(job.id, []) %}
++                        {% if results %}
++                          <ul class="result-list">
++                            {% for result in results %}
++                              <li class="result-item">
++                                <a
++                                  class="result-link{% if result.endswith('.txt') %} is-text{% endif %}"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  target="_blank"
++                                  rel="noopener"
++                                >
++                                  {{ result }}
++                                </a>
++                                <a
++                                  class="result-action"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  download="{{ result }}"
++                                >
++                                  Download
++                                </a>
++                              </li>
++                            {% endfor %}
++                          </ul>
++                        {% else %}
++                          <div class="result-empty">No results yet.</div>
++                        {% endif %}
++                      </div>
+                     </div>
+                     <div class="job-status">{{ job.status }}</div>
+                   </div>
+diff --git a/tests/test_app.py b/tests/test_app.py
+index 424ed321663b2a88c1574b6de2e4c46f0cd1ad12..21abb10479f7ea2afcf3d372db776286935ecf9b
+--- a/tests/test_app.py
++++ b/tests/test_app.py
+@@ -1,9 +1,10 @@
++from datetime import datetime, timezone
+ from pathlib import Path
+ 
+ from fastapi.testclient import TestClient
+ 
+ from mlx_ui.app import app
+-from mlx_ui.db import list_jobs
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+ 
+ 
+ def _configure_app(tmp_path: Path) -> None:
+@@ -62,3 +63,42 @@
+     jobs = list_jobs(Path(app.state.db_path))
+     assert len(jobs) == 1
+     assert "alpha.txt" in response.text
++
++
++def test_history_lists_results_and_download_endpoint(tmp_path: Path) -> None:
++    _configure_app(tmp_path)
++    db_path = Path(app.state.db_path)
++    init_db(db_path)
++
++    job_id = "job-123"
++    uploads_dir = Path(app.state.uploads_dir) / job_id
++    uploads_dir.mkdir(parents=True, exist_ok=True)
++    upload_path = uploads_dir / "alpha.txt"
++    upload_path.write_text("data", encoding="utf-8")
++
++    job = JobRecord(
++        id=job_id,
++        filename="alpha.txt",
++        status="done",
++        created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
++        upload_path=str(upload_path),
++    )
++    insert_job(db_path, job)
++
++    results_dir = Path(app.state.results_dir) / job_id
++    results_dir.mkdir(parents=True, exist_ok=True)
++    txt_path = results_dir / "alpha.txt"
++    txt_path.write_text("transcript", encoding="utf-8")
++    srt_path = results_dir / "alpha.srt"
++    srt_path.write_text("subtitles", encoding="utf-8")
++
++    with TestClient(app) as client:
++        response = client.get("/")
++
++        assert response.status_code == 200
++        assert f"/results/{job_id}/alpha.txt" in response.text
++        assert f"/results/{job_id}/alpha.srt" in response.text
++
++        download = client.get(f"/results/{job_id}/alpha.txt")
++        assert download.status_code == 200
++        assert download.text == "transcript"
+
+file update:
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index e18dd9889a4ce96fc96cd5ef7bd2ef082b84d27d..7714e63faba34a34ea061a1568aad53d97599b55
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -3,8 +3,8 @@
+ import shutil
+ from uuid import uuid4
+ 
+-from fastapi import FastAPI, File, Request, UploadFile
+-from fastapi.responses import HTMLResponse
++from fastapi import FastAPI, File, HTTPException, Request, UploadFile
++from fastapi.responses import FileResponse, HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
+ from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+@@ -51,11 +51,28 @@
+     return uploads_dir
+ 
+ 
++def is_safe_path_component(value: str) -> bool:
++    return value not in {"", ".", ".."} and Path(value).name == value
++
++
+ def sanitize_filename(filename: str) -> str:
+     safe_name = Path(filename).name
+     return safe_name or "upload.bin"
+ 
+ 
++def list_result_files(job_id: str) -> list[str]:
++    if not is_safe_path_component(job_id):
++        return []
++    job_dir = get_results_dir() / job_id
++    if not job_dir.is_dir():
++        return []
++    return sorted(path.name for path in job_dir.iterdir() if path.is_file())
++
++
++def build_results_index(jobs: list[JobRecord]) -> dict[str, list[str]]:
++    return {job.id: list_result_files(job.id) for job in jobs}
++
++
+ def new_job_record(job_id: str, filename: str, upload_path: Path) -> JobRecord:
+     return JobRecord(
+         id=job_id,
+@@ -68,10 +85,11 @@
+ 
+ @app.get("/", response_class=HTMLResponse)
+ def read_root(request: Request):
++    jobs = get_job_store()
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": get_job_store()},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
+ 
+ 
+@@ -100,5 +118,20 @@
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": jobs},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
++
++
++@app.get("/results/{job_id}/{filename}")
++def download_result(job_id: str, filename: str):
++    if not is_safe_path_component(job_id) or not is_safe_path_component(filename):
++        raise HTTPException(status_code=404)
++
++    job_dir = get_results_dir() / job_id
++    job_dir_resolved = job_dir.resolve()
++    file_path = (job_dir / filename).resolve()
++
++    if not file_path.is_file() or not file_path.is_relative_to(job_dir_resolved):
++        raise HTTPException(status_code=404)
++
++    return FileResponse(file_path)
+diff --git a/mlx_ui/templates/index.html b/mlx_ui/templates/index.html
+index fd98aea99956baf4d5692b9960df62df84cbc6a5..6af02f106d99e68b998bd306ba7733a343867dfe
+--- a/mlx_ui/templates/index.html
++++ b/mlx_ui/templates/index.html
+@@ -215,6 +215,66 @@
+         align-self: center;
+       }
+ 
++      .results {
++        margin-top: 10px;
++      }
++
++      .result-label {
++        font-size: 0.7rem;
++        text-transform: uppercase;
++        letter-spacing: 0.12em;
++        color: var(--accent-strong);
++      }
++
++      .result-list {
++        list-style: none;
++        margin: 6px 0 0;
++        padding: 0;
++        display: grid;
++        gap: 6px;
++      }
++
++      .result-item {
++        display: flex;
++        align-items: center;
++        gap: 10px;
++        flex-wrap: wrap;
++      }
++
++      .result-link {
++        color: var(--accent-strong);
++        text-decoration: none;
++        font-weight: 600;
++      }
++
++      .result-link:hover {
++        text-decoration: underline;
++      }
++
++      .result-link.is-text {
++        color: var(--accent);
++      }
++
++      .result-action {
++        font-size: 0.78rem;
++        color: var(--ink-muted);
++        text-decoration: none;
++        border: 1px solid #f1e2d2;
++        padding: 2px 8px;
++        border-radius: 999px;
++      }
++
++      .result-action:hover {
++        color: var(--accent-strong);
++        border-color: var(--accent);
++      }
++
++      .result-empty {
++        margin-top: 6px;
++        font-size: 0.85rem;
++        color: var(--ink-muted);
++      }
++
+       .placeholder {
+         margin-top: 16px;
+         padding-top: 16px;
+@@ -363,6 +423,35 @@
+                     <div>
+                       <div class="job-name">{{ job.filename }}</div>
+                       <div class="job-meta">Added {{ job.created_at }}</div>
++                      <div class="results">
++                        <div class="result-label">Results</div>
++                        {% set results = results_by_job.get(job.id, []) %}
++                        {% if results %}
++                          <ul class="result-list">
++                            {% for result in results %}
++                              <li class="result-item">
++                                <a
++                                  class="result-link{% if result.endswith('.txt') %} is-text{% endif %}"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  target="_blank"
++                                  rel="noopener"
++                                >
++                                  {{ result }}
++                                </a>
++                                <a
++                                  class="result-action"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  download="{{ result }}"
++                                >
++                                  Download
++                                </a>
++                              </li>
++                            {% endfor %}
++                          </ul>
++                        {% else %}
++                          <div class="result-empty">No results yet.</div>
++                        {% endif %}
++                      </div>
+                     </div>
+                     <div class="job-status">{{ job.status }}</div>
+                   </div>
+diff --git a/tests/test_app.py b/tests/test_app.py
+index 424ed321663b2a88c1574b6de2e4c46f0cd1ad12..21abb10479f7ea2afcf3d372db776286935ecf9b
+--- a/tests/test_app.py
++++ b/tests/test_app.py
+@@ -1,9 +1,10 @@
++from datetime import datetime, timezone
+ from pathlib import Path
+ 
+ from fastapi.testclient import TestClient
+ 
+ from mlx_ui.app import app
+-from mlx_ui.db import list_jobs
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+ 
+ 
+ def _configure_app(tmp_path: Path) -> None:
+@@ -62,3 +63,42 @@
+     jobs = list_jobs(Path(app.state.db_path))
+     assert len(jobs) == 1
+     assert "alpha.txt" in response.text
++
++
++def test_history_lists_results_and_download_endpoint(tmp_path: Path) -> None:
++    _configure_app(tmp_path)
++    db_path = Path(app.state.db_path)
++    init_db(db_path)
++
++    job_id = "job-123"
++    uploads_dir = Path(app.state.uploads_dir) / job_id
++    uploads_dir.mkdir(parents=True, exist_ok=True)
++    upload_path = uploads_dir / "alpha.txt"
++    upload_path.write_text("data", encoding="utf-8")
++
++    job = JobRecord(
++        id=job_id,
++        filename="alpha.txt",
++        status="done",
++        created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
++        upload_path=str(upload_path),
++    )
++    insert_job(db_path, job)
++
++    results_dir = Path(app.state.results_dir) / job_id
++    results_dir.mkdir(parents=True, exist_ok=True)
++    txt_path = results_dir / "alpha.txt"
++    txt_path.write_text("transcript", encoding="utf-8")
++    srt_path = results_dir / "alpha.srt"
++    srt_path.write_text("subtitles", encoding="utf-8")
++
++    with TestClient(app) as client:
++        response = client.get("/")
++
++        assert response.status_code == 200
++        assert f"/results/{job_id}/alpha.txt" in response.text
++        assert f"/results/{job_id}/alpha.srt" in response.text
++
++        download = client.get(f"/results/{job_id}/alpha.txt")
++        assert download.status_code == 200
++        assert download.text == "transcript"
+
+
+
+thinking
+**Confirming path traversal safeguards**
+
+Verified use of `Path.is_relative_to` for reliable path containment checks with resolved paths, ensuring files stay inside job directories and avoiding traversal issues even if directories or files are missing. Next, I'll make sure new helpers use existing safe listing functions and that tests and lint pass without introducing encoding or formatting issues.
+thinking
+**Adding symlink containment check**
+
+Decided to enforce that the resolved job directory must reside within the resolved results directory to prevent symlink-based escapes, raising 404 if violated; this strengthens path validation alongside existing file containment checks.
+file update
+M /Users/ivankhokhlov/code/mlx-ui/./mlx_ui/app.py
+@@ -129,3 +129,5 @@
+ 
+-    job_dir = get_results_dir() / job_id
++    results_dir = get_results_dir()
++    job_dir = results_dir / job_id
++    results_dir_resolved = results_dir.resolve()
+     job_dir_resolved = job_dir.resolve()
+@@ -133,2 +135,5 @@
+ 
++    if not job_dir_resolved.is_relative_to(results_dir_resolved):
++        raise HTTPException(status_code=404)
++
+     if not file_path.is_file() or not file_path.is_relative_to(job_dir_resolved):
+apply_patch(auto_approved=true) exited 0 in 38ms:
+Success. Updated the following files:
+M mlx_ui/app.py
+file update:
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index e18dd9889a4ce96fc96cd5ef7bd2ef082b84d27d..dd65c6065ad4525881b170522c84bcdb5d063fcf
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -3,8 +3,8 @@
+ import shutil
+ from uuid import uuid4
+ 
+-from fastapi import FastAPI, File, Request, UploadFile
+-from fastapi.responses import HTMLResponse
++from fastapi import FastAPI, File, HTTPException, Request, UploadFile
++from fastapi.responses import FileResponse, HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
+ from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+@@ -51,11 +51,28 @@
+     return uploads_dir
+ 
+ 
++def is_safe_path_component(value: str) -> bool:
++    return value not in {"", ".", ".."} and Path(value).name == value
++
++
+ def sanitize_filename(filename: str) -> str:
+     safe_name = Path(filename).name
+     return safe_name or "upload.bin"
+ 
+ 
++def list_result_files(job_id: str) -> list[str]:
++    if not is_safe_path_component(job_id):
++        return []
++    job_dir = get_results_dir() / job_id
++    if not job_dir.is_dir():
++        return []
++    return sorted(path.name for path in job_dir.iterdir() if path.is_file())
++
++
++def build_results_index(jobs: list[JobRecord]) -> dict[str, list[str]]:
++    return {job.id: list_result_files(job.id) for job in jobs}
++
++
+ def new_job_record(job_id: str, filename: str, upload_path: Path) -> JobRecord:
+     return JobRecord(
+         id=job_id,
+@@ -68,10 +85,11 @@
+ 
+ @app.get("/", response_class=HTMLResponse)
+ def read_root(request: Request):
++    jobs = get_job_store()
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": get_job_store()},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
+ 
+ 
+@@ -100,5 +118,25 @@
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": jobs},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
++
++
++@app.get("/results/{job_id}/{filename}")
++def download_result(job_id: str, filename: str):
++    if not is_safe_path_component(job_id) or not is_safe_path_component(filename):
++        raise HTTPException(status_code=404)
++
++    results_dir = get_results_dir()
++    job_dir = results_dir / job_id
++    results_dir_resolved = results_dir.resolve()
++    job_dir_resolved = job_dir.resolve()
++    file_path = (job_dir / filename).resolve()
++
++    if not job_dir_resolved.is_relative_to(results_dir_resolved):
++        raise HTTPException(status_code=404)
++
++    if not file_path.is_file() or not file_path.is_relative_to(job_dir_resolved):
++        raise HTTPException(status_code=404)
++
++    return FileResponse(file_path)
+diff --git a/mlx_ui/templates/index.html b/mlx_ui/templates/index.html
+index fd98aea99956baf4d5692b9960df62df84cbc6a5..6af02f106d99e68b998bd306ba7733a343867dfe
+--- a/mlx_ui/templates/index.html
++++ b/mlx_ui/templates/index.html
+@@ -215,6 +215,66 @@
+         align-self: center;
+       }
+ 
++      .results {
++        margin-top: 10px;
++      }
++
++      .result-label {
++        font-size: 0.7rem;
++        text-transform: uppercase;
++        letter-spacing: 0.12em;
++        color: var(--accent-strong);
++      }
++
++      .result-list {
++        list-style: none;
++        margin: 6px 0 0;
++        padding: 0;
++        display: grid;
++        gap: 6px;
++      }
++
++      .result-item {
++        display: flex;
++        align-items: center;
++        gap: 10px;
++        flex-wrap: wrap;
++      }
++
++      .result-link {
++        color: var(--accent-strong);
++        text-decoration: none;
++        font-weight: 600;
++      }
++
++      .result-link:hover {
++        text-decoration: underline;
++      }
++
++      .result-link.is-text {
++        color: var(--accent);
++      }
++
++      .result-action {
++        font-size: 0.78rem;
++        color: var(--ink-muted);
++        text-decoration: none;
++        border: 1px solid #f1e2d2;
++        padding: 2px 8px;
++        border-radius: 999px;
++      }
++
++      .result-action:hover {
++        color: var(--accent-strong);
++        border-color: var(--accent);
++      }
++
++      .result-empty {
++        margin-top: 6px;
++        font-size: 0.85rem;
++        color: var(--ink-muted);
++      }
++
+       .placeholder {
+         margin-top: 16px;
+         padding-top: 16px;
+@@ -363,6 +423,35 @@
+                     <div>
+                       <div class="job-name">{{ job.filename }}</div>
+                       <div class="job-meta">Added {{ job.created_at }}</div>
++                      <div class="results">
++                        <div class="result-label">Results</div>
++                        {% set results = results_by_job.get(job.id, []) %}
++                        {% if results %}
++                          <ul class="result-list">
++                            {% for result in results %}
++                              <li class="result-item">
++                                <a
++                                  class="result-link{% if result.endswith('.txt') %} is-text{% endif %}"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  target="_blank"
++                                  rel="noopener"
++                                >
++                                  {{ result }}
++                                </a>
++                                <a
++                                  class="result-action"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  download="{{ result }}"
++                                >
++                                  Download
++                                </a>
++                              </li>
++                            {% endfor %}
++                          </ul>
++                        {% else %}
++                          <div class="result-empty">No results yet.</div>
++                        {% endif %}
++                      </div>
+                     </div>
+                     <div class="job-status">{{ job.status }}</div>
+                   </div>
+diff --git a/tests/test_app.py b/tests/test_app.py
+index 424ed321663b2a88c1574b6de2e4c46f0cd1ad12..21abb10479f7ea2afcf3d372db776286935ecf9b
+--- a/tests/test_app.py
++++ b/tests/test_app.py
+@@ -1,9 +1,10 @@
++from datetime import datetime, timezone
+ from pathlib import Path
+ 
+ from fastapi.testclient import TestClient
+ 
+ from mlx_ui.app import app
+-from mlx_ui.db import list_jobs
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+ 
+ 
+ def _configure_app(tmp_path: Path) -> None:
+@@ -62,3 +63,42 @@
+     jobs = list_jobs(Path(app.state.db_path))
+     assert len(jobs) == 1
+     assert "alpha.txt" in response.text
++
++
++def test_history_lists_results_and_download_endpoint(tmp_path: Path) -> None:
++    _configure_app(tmp_path)
++    db_path = Path(app.state.db_path)
++    init_db(db_path)
++
++    job_id = "job-123"
++    uploads_dir = Path(app.state.uploads_dir) / job_id
++    uploads_dir.mkdir(parents=True, exist_ok=True)
++    upload_path = uploads_dir / "alpha.txt"
++    upload_path.write_text("data", encoding="utf-8")
++
++    job = JobRecord(
++        id=job_id,
++        filename="alpha.txt",
++        status="done",
++        created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
++        upload_path=str(upload_path),
++    )
++    insert_job(db_path, job)
++
++    results_dir = Path(app.state.results_dir) / job_id
++    results_dir.mkdir(parents=True, exist_ok=True)
++    txt_path = results_dir / "alpha.txt"
++    txt_path.write_text("transcript", encoding="utf-8")
++    srt_path = results_dir / "alpha.srt"
++    srt_path.write_text("subtitles", encoding="utf-8")
++
++    with TestClient(app) as client:
++        response = client.get("/")
++
++        assert response.status_code == 200
++        assert f"/results/{job_id}/alpha.txt" in response.text
++        assert f"/results/{job_id}/alpha.srt" in response.text
++
++        download = client.get(f"/results/{job_id}/alpha.txt")
++        assert download.status_code == 200
++        assert download.text == "transcript"
+
+file update:
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index e18dd9889a4ce96fc96cd5ef7bd2ef082b84d27d..dd65c6065ad4525881b170522c84bcdb5d063fcf
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -3,8 +3,8 @@
+ import shutil
+ from uuid import uuid4
+ 
+-from fastapi import FastAPI, File, Request, UploadFile
+-from fastapi.responses import HTMLResponse
++from fastapi import FastAPI, File, HTTPException, Request, UploadFile
++from fastapi.responses import FileResponse, HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
+ from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+@@ -51,11 +51,28 @@
+     return uploads_dir
+ 
+ 
++def is_safe_path_component(value: str) -> bool:
++    return value not in {"", ".", ".."} and Path(value).name == value
++
++
+ def sanitize_filename(filename: str) -> str:
+     safe_name = Path(filename).name
+     return safe_name or "upload.bin"
+ 
+ 
++def list_result_files(job_id: str) -> list[str]:
++    if not is_safe_path_component(job_id):
++        return []
++    job_dir = get_results_dir() / job_id
++    if not job_dir.is_dir():
++        return []
++    return sorted(path.name for path in job_dir.iterdir() if path.is_file())
++
++
++def build_results_index(jobs: list[JobRecord]) -> dict[str, list[str]]:
++    return {job.id: list_result_files(job.id) for job in jobs}
++
++
+ def new_job_record(job_id: str, filename: str, upload_path: Path) -> JobRecord:
+     return JobRecord(
+         id=job_id,
+@@ -68,10 +85,11 @@
+ 
+ @app.get("/", response_class=HTMLResponse)
+ def read_root(request: Request):
++    jobs = get_job_store()
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": get_job_store()},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
+ 
+ 
+@@ -100,5 +118,25 @@
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": jobs},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
++
++
++@app.get("/results/{job_id}/{filename}")
++def download_result(job_id: str, filename: str):
++    if not is_safe_path_component(job_id) or not is_safe_path_component(filename):
++        raise HTTPException(status_code=404)
++
++    results_dir = get_results_dir()
++    job_dir = results_dir / job_id
++    results_dir_resolved = results_dir.resolve()
++    job_dir_resolved = job_dir.resolve()
++    file_path = (job_dir / filename).resolve()
++
++    if not job_dir_resolved.is_relative_to(results_dir_resolved):
++        raise HTTPException(status_code=404)
++
++    if not file_path.is_file() or not file_path.is_relative_to(job_dir_resolved):
++        raise HTTPException(status_code=404)
++
++    return FileResponse(file_path)
+diff --git a/mlx_ui/templates/index.html b/mlx_ui/templates/index.html
+index fd98aea99956baf4d5692b9960df62df84cbc6a5..6af02f106d99e68b998bd306ba7733a343867dfe
+--- a/mlx_ui/templates/index.html
++++ b/mlx_ui/templates/index.html
+@@ -215,6 +215,66 @@
+         align-self: center;
+       }
+ 
++      .results {
++        margin-top: 10px;
++      }
++
++      .result-label {
++        font-size: 0.7rem;
++        text-transform: uppercase;
++        letter-spacing: 0.12em;
++        color: var(--accent-strong);
++      }
++
++      .result-list {
++        list-style: none;
++        margin: 6px 0 0;
++        padding: 0;
++        display: grid;
++        gap: 6px;
++      }
++
++      .result-item {
++        display: flex;
++        align-items: center;
++        gap: 10px;
++        flex-wrap: wrap;
++      }
++
++      .result-link {
++        color: var(--accent-strong);
++        text-decoration: none;
++        font-weight: 600;
++      }
++
++      .result-link:hover {
++        text-decoration: underline;
++      }
++
++      .result-link.is-text {
++        color: var(--accent);
++      }
++
++      .result-action {
++        font-size: 0.78rem;
++        color: var(--ink-muted);
++        text-decoration: none;
++        border: 1px solid #f1e2d2;
++        padding: 2px 8px;
++        border-radius: 999px;
++      }
++
++      .result-action:hover {
++        color: var(--accent-strong);
++        border-color: var(--accent);
++      }
++
++      .result-empty {
++        margin-top: 6px;
++        font-size: 0.85rem;
++        color: var(--ink-muted);
++      }
++
+       .placeholder {
+         margin-top: 16px;
+         padding-top: 16px;
+@@ -363,6 +423,35 @@
+                     <div>
+                       <div class="job-name">{{ job.filename }}</div>
+                       <div class="job-meta">Added {{ job.created_at }}</div>
++                      <div class="results">
++                        <div class="result-label">Results</div>
++                        {% set results = results_by_job.get(job.id, []) %}
++                        {% if results %}
++                          <ul class="result-list">
++                            {% for result in results %}
++                              <li class="result-item">
++                                <a
++                                  class="result-link{% if result.endswith('.txt') %} is-text{% endif %}"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  target="_blank"
++                                  rel="noopener"
++                                >
++                                  {{ result }}
++                                </a>
++                                <a
++                                  class="result-action"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  download="{{ result }}"
++                                >
++                                  Download
++                                </a>
++                              </li>
++                            {% endfor %}
++                          </ul>
++                        {% else %}
++                          <div class="result-empty">No results yet.</div>
++                        {% endif %}
++                      </div>
+                     </div>
+                     <div class="job-status">{{ job.status }}</div>
+                   </div>
+diff --git a/tests/test_app.py b/tests/test_app.py
+index 424ed321663b2a88c1574b6de2e4c46f0cd1ad12..21abb10479f7ea2afcf3d372db776286935ecf9b
+--- a/tests/test_app.py
++++ b/tests/test_app.py
+@@ -1,9 +1,10 @@
++from datetime import datetime, timezone
+ from pathlib import Path
+ 
+ from fastapi.testclient import TestClient
+ 
+ from mlx_ui.app import app
+-from mlx_ui.db import list_jobs
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+ 
+ 
+ def _configure_app(tmp_path: Path) -> None:
+@@ -62,3 +63,42 @@
+     jobs = list_jobs(Path(app.state.db_path))
+     assert len(jobs) == 1
+     assert "alpha.txt" in response.text
++
++
++def test_history_lists_results_and_download_endpoint(tmp_path: Path) -> None:
++    _configure_app(tmp_path)
++    db_path = Path(app.state.db_path)
++    init_db(db_path)
++
++    job_id = "job-123"
++    uploads_dir = Path(app.state.uploads_dir) / job_id
++    uploads_dir.mkdir(parents=True, exist_ok=True)
++    upload_path = uploads_dir / "alpha.txt"
++    upload_path.write_text("data", encoding="utf-8")
++
++    job = JobRecord(
++        id=job_id,
++        filename="alpha.txt",
++        status="done",
++        created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
++        upload_path=str(upload_path),
++    )
++    insert_job(db_path, job)
++
++    results_dir = Path(app.state.results_dir) / job_id
++    results_dir.mkdir(parents=True, exist_ok=True)
++    txt_path = results_dir / "alpha.txt"
++    txt_path.write_text("transcript", encoding="utf-8")
++    srt_path = results_dir / "alpha.srt"
++    srt_path.write_text("subtitles", encoding="utf-8")
++
++    with TestClient(app) as client:
++        response = client.get("/")
++
++        assert response.status_code == 200
++        assert f"/results/{job_id}/alpha.txt" in response.text
++        assert f"/results/{job_id}/alpha.srt" in response.text
++
++        download = client.get(f"/results/{job_id}/alpha.txt")
++        assert download.status_code == 200
++        assert download.text == "transcript"
+
+
+
+thinking
+**Verifying results_dir handling and test coverage**
+
+Confirmed `results_dir_resolved` won't fail if the directory doesn't exist since resolve is non-strict, and `results_by_job` is always passed to the template, so no default needed. Next, ensuring `.agent/logs` exists before tests run.
+thinking
+**Preparing test run with logging**
+
+Plan to ensure `.agent/logs` exists and run tests with `bash -lc` to enable pipefail, capturing output to a log named with `CODEX_ITERATION`.
+exec
+/bin/zsh -lc 'mkdir -p .agent/logs' in /Users/ivankhokhlov/code/mlx-ui succeeded in 67ms:
+
+file update:
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index e18dd9889a4ce96fc96cd5ef7bd2ef082b84d27d..dd65c6065ad4525881b170522c84bcdb5d063fcf
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -3,8 +3,8 @@
+ import shutil
+ from uuid import uuid4
+ 
+-from fastapi import FastAPI, File, Request, UploadFile
+-from fastapi.responses import HTMLResponse
++from fastapi import FastAPI, File, HTTPException, Request, UploadFile
++from fastapi.responses import FileResponse, HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
+ from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+@@ -51,11 +51,28 @@
+     return uploads_dir
+ 
+ 
++def is_safe_path_component(value: str) -> bool:
++    return value not in {"", ".", ".."} and Path(value).name == value
++
++
+ def sanitize_filename(filename: str) -> str:
+     safe_name = Path(filename).name
+     return safe_name or "upload.bin"
+ 
+ 
++def list_result_files(job_id: str) -> list[str]:
++    if not is_safe_path_component(job_id):
++        return []
++    job_dir = get_results_dir() / job_id
++    if not job_dir.is_dir():
++        return []
++    return sorted(path.name for path in job_dir.iterdir() if path.is_file())
++
++
++def build_results_index(jobs: list[JobRecord]) -> dict[str, list[str]]:
++    return {job.id: list_result_files(job.id) for job in jobs}
++
++
+ def new_job_record(job_id: str, filename: str, upload_path: Path) -> JobRecord:
+     return JobRecord(
+         id=job_id,
+@@ -68,10 +85,11 @@
+ 
+ @app.get("/", response_class=HTMLResponse)
+ def read_root(request: Request):
++    jobs = get_job_store()
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": get_job_store()},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
+ 
+ 
+@@ -100,5 +118,25 @@
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": jobs},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
++
++
++@app.get("/results/{job_id}/{filename}")
++def download_result(job_id: str, filename: str):
++    if not is_safe_path_component(job_id) or not is_safe_path_component(filename):
++        raise HTTPException(status_code=404)
++
++    results_dir = get_results_dir()
++    job_dir = results_dir / job_id
++    results_dir_resolved = results_dir.resolve()
++    job_dir_resolved = job_dir.resolve()
++    file_path = (job_dir / filename).resolve()
++
++    if not job_dir_resolved.is_relative_to(results_dir_resolved):
++        raise HTTPException(status_code=404)
++
++    if not file_path.is_file() or not file_path.is_relative_to(job_dir_resolved):
++        raise HTTPException(status_code=404)
++
++    return FileResponse(file_path)
+diff --git a/mlx_ui/templates/index.html b/mlx_ui/templates/index.html
+index fd98aea99956baf4d5692b9960df62df84cbc6a5..6af02f106d99e68b998bd306ba7733a343867dfe
+--- a/mlx_ui/templates/index.html
++++ b/mlx_ui/templates/index.html
+@@ -215,6 +215,66 @@
+         align-self: center;
+       }
+ 
++      .results {
++        margin-top: 10px;
++      }
++
++      .result-label {
++        font-size: 0.7rem;
++        text-transform: uppercase;
++        letter-spacing: 0.12em;
++        color: var(--accent-strong);
++      }
++
++      .result-list {
++        list-style: none;
++        margin: 6px 0 0;
++        padding: 0;
++        display: grid;
++        gap: 6px;
++      }
++
++      .result-item {
++        display: flex;
++        align-items: center;
++        gap: 10px;
++        flex-wrap: wrap;
++      }
++
++      .result-link {
++        color: var(--accent-strong);
++        text-decoration: none;
++        font-weight: 600;
++      }
++
++      .result-link:hover {
++        text-decoration: underline;
++      }
++
++      .result-link.is-text {
++        color: var(--accent);
++      }
++
++      .result-action {
++        font-size: 0.78rem;
++        color: var(--ink-muted);
++        text-decoration: none;
++        border: 1px solid #f1e2d2;
++        padding: 2px 8px;
++        border-radius: 999px;
++      }
++
++      .result-action:hover {
++        color: var(--accent-strong);
++        border-color: var(--accent);
++      }
++
++      .result-empty {
++        margin-top: 6px;
++        font-size: 0.85rem;
++        color: var(--ink-muted);
++      }
++
+       .placeholder {
+         margin-top: 16px;
+         padding-top: 16px;
+@@ -363,6 +423,35 @@
+                     <div>
+                       <div class="job-name">{{ job.filename }}</div>
+                       <div class="job-meta">Added {{ job.created_at }}</div>
++                      <div class="results">
++                        <div class="result-label">Results</div>
++                        {% set results = results_by_job.get(job.id, []) %}
++                        {% if results %}
++                          <ul class="result-list">
++                            {% for result in results %}
++                              <li class="result-item">
++                                <a
++                                  class="result-link{% if result.endswith('.txt') %} is-text{% endif %}"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  target="_blank"
++                                  rel="noopener"
++                                >
++                                  {{ result }}
++                                </a>
++                                <a
++                                  class="result-action"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  download="{{ result }}"
++                                >
++                                  Download
++                                </a>
++                              </li>
++                            {% endfor %}
++                          </ul>
++                        {% else %}
++                          <div class="result-empty">No results yet.</div>
++                        {% endif %}
++                      </div>
+                     </div>
+                     <div class="job-status">{{ job.status }}</div>
+                   </div>
+diff --git a/tests/test_app.py b/tests/test_app.py
+index 424ed321663b2a88c1574b6de2e4c46f0cd1ad12..21abb10479f7ea2afcf3d372db776286935ecf9b
+--- a/tests/test_app.py
++++ b/tests/test_app.py
+@@ -1,9 +1,10 @@
++from datetime import datetime, timezone
+ from pathlib import Path
+ 
+ from fastapi.testclient import TestClient
+ 
+ from mlx_ui.app import app
+-from mlx_ui.db import list_jobs
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+ 
+ 
+ def _configure_app(tmp_path: Path) -> None:
+@@ -62,3 +63,42 @@
+     jobs = list_jobs(Path(app.state.db_path))
+     assert len(jobs) == 1
+     assert "alpha.txt" in response.text
++
++
++def test_history_lists_results_and_download_endpoint(tmp_path: Path) -> None:
++    _configure_app(tmp_path)
++    db_path = Path(app.state.db_path)
++    init_db(db_path)
++
++    job_id = "job-123"
++    uploads_dir = Path(app.state.uploads_dir) / job_id
++    uploads_dir.mkdir(parents=True, exist_ok=True)
++    upload_path = uploads_dir / "alpha.txt"
++    upload_path.write_text("data", encoding="utf-8")
++
++    job = JobRecord(
++        id=job_id,
++        filename="alpha.txt",
++        status="done",
++        created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
++        upload_path=str(upload_path),
++    )
++    insert_job(db_path, job)
++
++    results_dir = Path(app.state.results_dir) / job_id
++    results_dir.mkdir(parents=True, exist_ok=True)
++    txt_path = results_dir / "alpha.txt"
++    txt_path.write_text("transcript", encoding="utf-8")
++    srt_path = results_dir / "alpha.srt"
++    srt_path.write_text("subtitles", encoding="utf-8")
++
++    with TestClient(app) as client:
++        response = client.get("/")
++
++        assert response.status_code == 200
++        assert f"/results/{job_id}/alpha.txt" in response.text
++        assert f"/results/{job_id}/alpha.srt" in response.text
++
++        download = client.get(f"/results/{job_id}/alpha.txt")
++        assert download.status_code == 200
++        assert download.text == "transcript"
+
+
+thinking
+**Running tests**
+exec
+/bin/zsh -lc 'bash -lc "set -o pipefail; make test 2>&1 | tee .agent/logs/test_${CODEX_ITERATION}.log"' in /Users/ivankhokhlov/code/mlx-ui succeeded in 1.70s:
+poetry run pytest
+============================= test session starts ==============================
+platform darwin -- Python 3.12.12, pytest-8.4.2, pluggy-1.6.0
+rootdir: /Users/ivankhokhlov/code/mlx-ui
+configfile: pyproject.toml
+plugins: anyio-4.12.1
+collected 6 items
+
+tests/test_app.py ....                                                   [ 66%]
+tests/test_transcriber.py .                                              [ 83%]
+tests/test_worker.py .                                                   [100%]
+
+=============================== warnings summary ===============================
+mlx_ui/app.py:25
+  /Users/ivankhokhlov/code/mlx-ui/mlx_ui/app.py:25: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+file update:
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index e18dd9889a4ce96fc96cd5ef7bd2ef082b84d27d..dd65c6065ad4525881b170522c84bcdb5d063fcf
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -3,8 +3,8 @@
+ import shutil
+ from uuid import uuid4
+ 
+-from fastapi import FastAPI, File, Request, UploadFile
+-from fastapi.responses import HTMLResponse
++from fastapi import FastAPI, File, HTTPException, Request, UploadFile
++from fastapi.responses import FileResponse, HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
+ from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+@@ -51,11 +51,28 @@
+     return uploads_dir
+ 
+ 
++def is_safe_path_component(value: str) -> bool:
++    return value not in {"", ".", ".."} and Path(value).name == value
++
++
+ def sanitize_filename(filename: str) -> str:
+     safe_name = Path(filename).name
+     return safe_name or "upload.bin"
+ 
+ 
++def list_result_files(job_id: str) -> list[str]:
++    if not is_safe_path_component(job_id):
++        return []
++    job_dir = get_results_dir() / job_id
++    if not job_dir.is_dir():
++        return []
++    return sorted(path.name for path in job_dir.iterdir() if path.is_file())
++
++
++def build_results_index(jobs: list[JobRecord]) -> dict[str, list[str]]:
++    return {job.id: list_result_files(job.id) for job in jobs}
++
++
+ def new_job_record(job_id: str, filename: str, upload_path: Path) -> JobRecord:
+     return JobRecord(
+         id=job_id,
+@@ -68,10 +85,11 @@
+ 
+ @app.get("/", response_class=HTMLResponse)
+ def read_root(request: Request):
++    jobs = get_job_store()
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": get_job_store()},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
+ 
+ 
+@@ -100,5 +118,25 @@
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": jobs},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
++
++
++@app.get("/results/{job_id}/{filename}")
++def download_result(job_id: str, filename: str):
++    if not is_safe_path_component(job_id) or not is_safe_path_component(filename):
++        raise HTTPException(status_code=404)
++
++    results_dir = get_results_dir()
++    job_dir = results_dir / job_id
++    results_dir_resolved = results_dir.resolve()
++    job_dir_resolved = job_dir.resolve()
++    file_path = (job_dir / filename).resolve()
++
++    if not job_dir_resolved.is_relative_to(results_dir_resolved):
++        raise HTTPException(status_code=404)
++
++    if not file_path.is_file() or not file_path.is_relative_to(job_dir_resolved):
++        raise HTTPException(status_code=404)
++
++    return FileResponse(file_path)
+diff --git a/mlx_ui/templates/index.html b/mlx_ui/templates/index.html
+index fd98aea99956baf4d5692b9960df62df84cbc6a5..6af02f106d99e68b998bd306ba7733a343867dfe
+--- a/mlx_ui/templates/index.html
++++ b/mlx_ui/templates/index.html
+@@ -215,6 +215,66 @@
+         align-self: center;
+       }
+ 
++      .results {
++        margin-top: 10px;
++      }
++
++      .result-label {
++        font-size: 0.7rem;
++        text-transform: uppercase;
++        letter-spacing: 0.12em;
++        color: var(--accent-strong);
++      }
++
++      .result-list {
++        list-style: none;
++        margin: 6px 0 0;
++        padding: 0;
++        display: grid;
++        gap: 6px;
++      }
++
++      .result-item {
++        display: flex;
++        align-items: center;
++        gap: 10px;
++        flex-wrap: wrap;
++      }
++
++      .result-link {
++        color: var(--accent-strong);
++        text-decoration: none;
++        font-weight: 600;
++      }
++
++      .result-link:hover {
++        text-decoration: underline;
++      }
++
++      .result-link.is-text {
++        color: var(--accent);
++      }
++
++      .result-action {
++        font-size: 0.78rem;
++        color: var(--ink-muted);
++        text-decoration: none;
++        border: 1px solid #f1e2d2;
++        padding: 2px 8px;
++        border-radius: 999px;
++      }
++
++      .result-action:hover {
++        color: var(--accent-strong);
++        border-color: var(--accent);
++      }
++
++      .result-empty {
++        margin-top: 6px;
++        font-size: 0.85rem;
++        color: var(--ink-muted);
++      }
++
+       .placeholder {
+         margin-top: 16px;
+         padding-top: 16px;
+@@ -363,6 +423,35 @@
+                     <div>
+                       <div class="job-name">{{ job.filename }}</div>
+                       <div class="job-meta">Added {{ job.created_at }}</div>
++                      <div class="results">
++                        <div class="result-label">Results</div>
++                        {% set results = results_by_job.get(job.id, []) %}
++                        {% if results %}
++                          <ul class="result-list">
++                            {% for result in results %}
++                              <li class="result-item">
++                                <a
++                                  class="result-link{% if result.endswith('.txt') %} is-text{% endif %}"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  target="_blank"
++                                  rel="noopener"
++                                >
++                                  {{ result }}
++                                </a>
++                                <a
++                                  class="result-action"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  download="{{ result }}"
++                                >
++                                  Download
++                                </a>
++                              </li>
++                            {% endfor %}
++                          </ul>
++                        {% else %}
++                          <div class="result-empty">No results yet.</div>
++                        {% endif %}
++                      </div>
+                     </div>
+                     <div class="job-status">{{ job.status }}</div>
+                   </div>
+diff --git a/tests/test_app.py b/tests/test_app.py
+index 424ed321663b2a88c1574b6de2e4c46f0cd1ad12..21abb10479f7ea2afcf3d372db776286935ecf9b
+--- a/tests/test_app.py
++++ b/tests/test_app.py
+@@ -1,9 +1,10 @@
++from datetime import datetime, timezone
+ from pathlib import Path
+ 
+ from fastapi.testclient import TestClient
+ 
+ from mlx_ui.app import app
+-from mlx_ui.db import list_jobs
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+ 
+ 
+ def _configure_app(tmp_path: Path) -> None:
+@@ -62,3 +63,42 @@
+     jobs = list_jobs(Path(app.state.db_path))
+     assert len(jobs) == 1
+     assert "alpha.txt" in response.text
++
++
++def test_history_lists_results_and_download_endpoint(tmp_path: Path) -> None:
++    _configure_app(tmp_path)
++    db_path = Path(app.state.db_path)
++    init_db(db_path)
++
++    job_id = "job-123"
++    uploads_dir = Path(app.state.uploads_dir) / job_id
++    uploads_dir.mkdir(parents=True, exist_ok=True)
++    upload_path = uploads_dir / "alpha.txt"
++    upload_path.write_text("data", encoding="utf-8")
++
++    job = JobRecord(
++        id=job_id,
++        filename="alpha.txt",
++        status="done",
++        created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
++        upload_path=str(upload_path),
++    )
++    insert_job(db_path, job)
++
++    results_dir = Path(app.state.results_dir) / job_id
++    results_dir.mkdir(parents=True, exist_ok=True)
++    txt_path = results_dir / "alpha.txt"
++    txt_path.write_text("transcript", encoding="utf-8")
++    srt_path = results_dir / "alpha.srt"
++    srt_path.write_text("subtitles", encoding="utf-8")
++
++    with TestClient(app) as client:
++        response = client.get("/")
++
++        assert response.status_code == 200
++        assert f"/results/{job_id}/alpha.txt" in response.text
++        assert f"/results/{job_id}/alpha.srt" in response.text
++
++        download = client.get(f"/results/{job_id}/alpha.txt")
++        assert download.status_code == 200
++        assert download.text == "transcript"
+
+
+thinking
+**Running lint checks**
+exec
+/bin/zsh -lc 'bash -lc "set -o pipefail; make lint 2>&1 | tee .agent/logs/lint_${CODEX_ITERATION}.log"' in /Users/ivankhokhlov/code/mlx-ui succeeded in 635ms:
+poetry run ruff check .
+All checks passed!
+file update:
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index e18dd9889a4ce96fc96cd5ef7bd2ef082b84d27d..dd65c6065ad4525881b170522c84bcdb5d063fcf
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -3,8 +3,8 @@
+ import shutil
+ from uuid import uuid4
+ 
+-from fastapi import FastAPI, File, Request, UploadFile
+-from fastapi.responses import HTMLResponse
++from fastapi import FastAPI, File, HTTPException, Request, UploadFile
++from fastapi.responses import FileResponse, HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
+ from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+@@ -51,11 +51,28 @@
+     return uploads_dir
+ 
+ 
++def is_safe_path_component(value: str) -> bool:
++    return value not in {"", ".", ".."} and Path(value).name == value
++
++
+ def sanitize_filename(filename: str) -> str:
+     safe_name = Path(filename).name
+     return safe_name or "upload.bin"
+ 
+ 
++def list_result_files(job_id: str) -> list[str]:
++    if not is_safe_path_component(job_id):
++        return []
++    job_dir = get_results_dir() / job_id
++    if not job_dir.is_dir():
++        return []
++    return sorted(path.name for path in job_dir.iterdir() if path.is_file())
++
++
++def build_results_index(jobs: list[JobRecord]) -> dict[str, list[str]]:
++    return {job.id: list_result_files(job.id) for job in jobs}
++
++
+ def new_job_record(job_id: str, filename: str, upload_path: Path) -> JobRecord:
+     return JobRecord(
+         id=job_id,
+@@ -68,10 +85,11 @@
+ 
+ @app.get("/", response_class=HTMLResponse)
+ def read_root(request: Request):
++    jobs = get_job_store()
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": get_job_store()},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
+ 
+ 
+@@ -100,5 +118,25 @@
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": jobs},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
++
++
++@app.get("/results/{job_id}/{filename}")
++def download_result(job_id: str, filename: str):
++    if not is_safe_path_component(job_id) or not is_safe_path_component(filename):
++        raise HTTPException(status_code=404)
++
++    results_dir = get_results_dir()
++    job_dir = results_dir / job_id
++    results_dir_resolved = results_dir.resolve()
++    job_dir_resolved = job_dir.resolve()
++    file_path = (job_dir / filename).resolve()
++
++    if not job_dir_resolved.is_relative_to(results_dir_resolved):
++        raise HTTPException(status_code=404)
++
++    if not file_path.is_file() or not file_path.is_relative_to(job_dir_resolved):
++        raise HTTPException(status_code=404)
++
++    return FileResponse(file_path)
+diff --git a/mlx_ui/templates/index.html b/mlx_ui/templates/index.html
+index fd98aea99956baf4d5692b9960df62df84cbc6a5..6af02f106d99e68b998bd306ba7733a343867dfe
+--- a/mlx_ui/templates/index.html
++++ b/mlx_ui/templates/index.html
+@@ -215,6 +215,66 @@
+         align-self: center;
+       }
+ 
++      .results {
++        margin-top: 10px;
++      }
++
++      .result-label {
++        font-size: 0.7rem;
++        text-transform: uppercase;
++        letter-spacing: 0.12em;
++        color: var(--accent-strong);
++      }
++
++      .result-list {
++        list-style: none;
++        margin: 6px 0 0;
++        padding: 0;
++        display: grid;
++        gap: 6px;
++      }
++
++      .result-item {
++        display: flex;
++        align-items: center;
++        gap: 10px;
++        flex-wrap: wrap;
++      }
++
++      .result-link {
++        color: var(--accent-strong);
++        text-decoration: none;
++        font-weight: 600;
++      }
++
++      .result-link:hover {
++        text-decoration: underline;
++      }
++
++      .result-link.is-text {
++        color: var(--accent);
++      }
++
++      .result-action {
++        font-size: 0.78rem;
++        color: var(--ink-muted);
++        text-decoration: none;
++        border: 1px solid #f1e2d2;
++        padding: 2px 8px;
++        border-radius: 999px;
++      }
++
++      .result-action:hover {
++        color: var(--accent-strong);
++        border-color: var(--accent);
++      }
++
++      .result-empty {
++        margin-top: 6px;
++        font-size: 0.85rem;
++        color: var(--ink-muted);
++      }
++
+       .placeholder {
+         margin-top: 16px;
+         padding-top: 16px;
+@@ -363,6 +423,35 @@
+                     <div>
+                       <div class="job-name">{{ job.filename }}</div>
+                       <div class="job-meta">Added {{ job.created_at }}</div>
++                      <div class="results">
++                        <div class="result-label">Results</div>
++                        {% set results = results_by_job.get(job.id, []) %}
++                        {% if results %}
++                          <ul class="result-list">
++                            {% for result in results %}
++                              <li class="result-item">
++                                <a
++                                  class="result-link{% if result.endswith('.txt') %} is-text{% endif %}"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  target="_blank"
++                                  rel="noopener"
++                                >
++                                  {{ result }}
++                                </a>
++                                <a
++                                  class="result-action"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  download="{{ result }}"
++                                >
++                                  Download
++                                </a>
++                              </li>
++                            {% endfor %}
++                          </ul>
++                        {% else %}
++                          <div class="result-empty">No results yet.</div>
++                        {% endif %}
++                      </div>
+                     </div>
+                     <div class="job-status">{{ job.status }}</div>
+                   </div>
+diff --git a/tests/test_app.py b/tests/test_app.py
+index 424ed321663b2a88c1574b6de2e4c46f0cd1ad12..21abb10479f7ea2afcf3d372db776286935ecf9b
+--- a/tests/test_app.py
++++ b/tests/test_app.py
+@@ -1,9 +1,10 @@
++from datetime import datetime, timezone
+ from pathlib import Path
+ 
+ from fastapi.testclient import TestClient
+ 
+ from mlx_ui.app import app
+-from mlx_ui.db import list_jobs
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+ 
+ 
+ def _configure_app(tmp_path: Path) -> None:
+@@ -62,3 +63,42 @@
+     jobs = list_jobs(Path(app.state.db_path))
+     assert len(jobs) == 1
+     assert "alpha.txt" in response.text
++
++
++def test_history_lists_results_and_download_endpoint(tmp_path: Path) -> None:
++    _configure_app(tmp_path)
++    db_path = Path(app.state.db_path)
++    init_db(db_path)
++
++    job_id = "job-123"
++    uploads_dir = Path(app.state.uploads_dir) / job_id
++    uploads_dir.mkdir(parents=True, exist_ok=True)
++    upload_path = uploads_dir / "alpha.txt"
++    upload_path.write_text("data", encoding="utf-8")
++
++    job = JobRecord(
++        id=job_id,
++        filename="alpha.txt",
++        status="done",
++        created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
++        upload_path=str(upload_path),
++    )
++    insert_job(db_path, job)
++
++    results_dir = Path(app.state.results_dir) / job_id
++    results_dir.mkdir(parents=True, exist_ok=True)
++    txt_path = results_dir / "alpha.txt"
++    txt_path.write_text("transcript", encoding="utf-8")
++    srt_path = results_dir / "alpha.srt"
++    srt_path.write_text("subtitles", encoding="utf-8")
++
++    with TestClient(app) as client:
++        response = client.get("/")
++
++        assert response.status_code == 200
++        assert f"/results/{job_id}/alpha.txt" in response.text
++        assert f"/results/{job_id}/alpha.srt" in response.text
++
++        download = client.get(f"/results/{job_id}/alpha.txt")
++        assert download.status_code == 200
++        assert download.text == "transcript"
+
+
+thinking
+**Planning agent report updates**
+
+Planning to update the agent's worker_report.md and append progress to progress.md with timestamp, iteration, task ID, and test/lint summaries; next step is to inspect the CODEX_ITERATION environment variable for its value.
+exec
+/bin/zsh -lc 'echo $CODEX_ITERATION' in /Users/ivankhokhlov/code/mlx-ui succeeded in 69ms:
+9
+file update:
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index e18dd9889a4ce96fc96cd5ef7bd2ef082b84d27d..dd65c6065ad4525881b170522c84bcdb5d063fcf
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -3,8 +3,8 @@
+ import shutil
+ from uuid import uuid4
+ 
+-from fastapi import FastAPI, File, Request, UploadFile
+-from fastapi.responses import HTMLResponse
++from fastapi import FastAPI, File, HTTPException, Request, UploadFile
++from fastapi.responses import FileResponse, HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
+ from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+@@ -51,11 +51,28 @@
+     return uploads_dir
+ 
+ 
++def is_safe_path_component(value: str) -> bool:
++    return value not in {"", ".", ".."} and Path(value).name == value
++
++
+ def sanitize_filename(filename: str) -> str:
+     safe_name = Path(filename).name
+     return safe_name or "upload.bin"
+ 
+ 
++def list_result_files(job_id: str) -> list[str]:
++    if not is_safe_path_component(job_id):
++        return []
++    job_dir = get_results_dir() / job_id
++    if not job_dir.is_dir():
++        return []
++    return sorted(path.name for path in job_dir.iterdir() if path.is_file())
++
++
++def build_results_index(jobs: list[JobRecord]) -> dict[str, list[str]]:
++    return {job.id: list_result_files(job.id) for job in jobs}
++
++
+ def new_job_record(job_id: str, filename: str, upload_path: Path) -> JobRecord:
+     return JobRecord(
+         id=job_id,
+@@ -68,10 +85,11 @@
+ 
+ @app.get("/", response_class=HTMLResponse)
+ def read_root(request: Request):
++    jobs = get_job_store()
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": get_job_store()},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
+ 
+ 
+@@ -100,5 +118,25 @@
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": jobs},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
++
++
++@app.get("/results/{job_id}/{filename}")
++def download_result(job_id: str, filename: str):
++    if not is_safe_path_component(job_id) or not is_safe_path_component(filename):
++        raise HTTPException(status_code=404)
++
++    results_dir = get_results_dir()
++    job_dir = results_dir / job_id
++    results_dir_resolved = results_dir.resolve()
++    job_dir_resolved = job_dir.resolve()
++    file_path = (job_dir / filename).resolve()
++
++    if not job_dir_resolved.is_relative_to(results_dir_resolved):
++        raise HTTPException(status_code=404)
++
++    if not file_path.is_file() or not file_path.is_relative_to(job_dir_resolved):
++        raise HTTPException(status_code=404)
++
++    return FileResponse(file_path)
+diff --git a/mlx_ui/templates/index.html b/mlx_ui/templates/index.html
+index fd98aea99956baf4d5692b9960df62df84cbc6a5..6af02f106d99e68b998bd306ba7733a343867dfe
+--- a/mlx_ui/templates/index.html
++++ b/mlx_ui/templates/index.html
+@@ -215,6 +215,66 @@
+         align-self: center;
+       }
+ 
++      .results {
++        margin-top: 10px;
++      }
++
++      .result-label {
++        font-size: 0.7rem;
++        text-transform: uppercase;
++        letter-spacing: 0.12em;
++        color: var(--accent-strong);
++      }
++
++      .result-list {
++        list-style: none;
++        margin: 6px 0 0;
++        padding: 0;
++        display: grid;
++        gap: 6px;
++      }
++
++      .result-item {
++        display: flex;
++        align-items: center;
++        gap: 10px;
++        flex-wrap: wrap;
++      }
++
++      .result-link {
++        color: var(--accent-strong);
++        text-decoration: none;
++        font-weight: 600;
++      }
++
++      .result-link:hover {
++        text-decoration: underline;
++      }
++
++      .result-link.is-text {
++        color: var(--accent);
++      }
++
++      .result-action {
++        font-size: 0.78rem;
++        color: var(--ink-muted);
++        text-decoration: none;
++        border: 1px solid #f1e2d2;
++        padding: 2px 8px;
++        border-radius: 999px;
++      }
++
++      .result-action:hover {
++        color: var(--accent-strong);
++        border-color: var(--accent);
++      }
++
++      .result-empty {
++        margin-top: 6px;
++        font-size: 0.85rem;
++        color: var(--ink-muted);
++      }
++
+       .placeholder {
+         margin-top: 16px;
+         padding-top: 16px;
+@@ -363,6 +423,35 @@
+                     <div>
+                       <div class="job-name">{{ job.filename }}</div>
+                       <div class="job-meta">Added {{ job.created_at }}</div>
++                      <div class="results">
++                        <div class="result-label">Results</div>
++                        {% set results = results_by_job.get(job.id, []) %}
++                        {% if results %}
++                          <ul class="result-list">
++                            {% for result in results %}
++                              <li class="result-item">
++                                <a
++                                  class="result-link{% if result.endswith('.txt') %} is-text{% endif %}"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  target="_blank"
++                                  rel="noopener"
++                                >
++                                  {{ result }}
++                                </a>
++                                <a
++                                  class="result-action"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  download="{{ result }}"
++                                >
++                                  Download
++                                </a>
++                              </li>
++                            {% endfor %}
++                          </ul>
++                        {% else %}
++                          <div class="result-empty">No results yet.</div>
++                        {% endif %}
++                      </div>
+                     </div>
+                     <div class="job-status">{{ job.status }}</div>
+                   </div>
+diff --git a/tests/test_app.py b/tests/test_app.py
+index 424ed321663b2a88c1574b6de2e4c46f0cd1ad12..21abb10479f7ea2afcf3d372db776286935ecf9b
+--- a/tests/test_app.py
++++ b/tests/test_app.py
+@@ -1,9 +1,10 @@
++from datetime import datetime, timezone
+ from pathlib import Path
+ 
+ from fastapi.testclient import TestClient
+ 
+ from mlx_ui.app import app
+-from mlx_ui.db import list_jobs
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+ 
+ 
+ def _configure_app(tmp_path: Path) -> None:
+@@ -62,3 +63,42 @@
+     jobs = list_jobs(Path(app.state.db_path))
+     assert len(jobs) == 1
+     assert "alpha.txt" in response.text
++
++
++def test_history_lists_results_and_download_endpoint(tmp_path: Path) -> None:
++    _configure_app(tmp_path)
++    db_path = Path(app.state.db_path)
++    init_db(db_path)
++
++    job_id = "job-123"
++    uploads_dir = Path(app.state.uploads_dir) / job_id
++    uploads_dir.mkdir(parents=True, exist_ok=True)
++    upload_path = uploads_dir / "alpha.txt"
++    upload_path.write_text("data", encoding="utf-8")
++
++    job = JobRecord(
++        id=job_id,
++        filename="alpha.txt",
++        status="done",
++        created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
++        upload_path=str(upload_path),
++    )
++    insert_job(db_path, job)
++
++    results_dir = Path(app.state.results_dir) / job_id
++    results_dir.mkdir(parents=True, exist_ok=True)
++    txt_path = results_dir / "alpha.txt"
++    txt_path.write_text("transcript", encoding="utf-8")
++    srt_path = results_dir / "alpha.srt"
++    srt_path.write_text("subtitles", encoding="utf-8")
++
++    with TestClient(app) as client:
++        response = client.get("/")
++
++        assert response.status_code == 200
++        assert f"/results/{job_id}/alpha.txt" in response.text
++        assert f"/results/{job_id}/alpha.srt" in response.text
++
++        download = client.get(f"/results/{job_id}/alpha.txt")
++        assert download.status_code == 200
++        assert download.text == "transcript"
+
+
+thinking
+**Preparing structured worker report**
+
+I'm creating a detailed worker report with timestamp, task details, changes made, files modified, commands run with pass/fail results, and updating the progress log with a timestamped summary line.
+exec
+/bin/zsh -lc "cat <<'EOF' > .agent/worker_report.md
+# Worker Report
+
+Task: WUI-021 — Results browsing + download
+
+What changed:
+- Added result file indexing plus a safe download endpoint.
+- Rendered per-job result links with view/download actions in History.
+- Added tests covering history links and the results endpoint.
+
+Files changed:
+- mlx_ui/app.py
+- mlx_ui/templates/index.html
+- tests/test_app.py
+
+Commands run:
+- make test (pass)
+- make lint (pass)
+EOF" in /Users/ivankhokhlov/code/mlx-ui succeeded in 64ms:
+
+file update:
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index e18dd9889a4ce96fc96cd5ef7bd2ef082b84d27d..dd65c6065ad4525881b170522c84bcdb5d063fcf
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -3,8 +3,8 @@
+ import shutil
+ from uuid import uuid4
+ 
+-from fastapi import FastAPI, File, Request, UploadFile
+-from fastapi.responses import HTMLResponse
++from fastapi import FastAPI, File, HTTPException, Request, UploadFile
++from fastapi.responses import FileResponse, HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
+ from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+@@ -51,11 +51,28 @@
+     return uploads_dir
+ 
+ 
++def is_safe_path_component(value: str) -> bool:
++    return value not in {"", ".", ".."} and Path(value).name == value
++
++
+ def sanitize_filename(filename: str) -> str:
+     safe_name = Path(filename).name
+     return safe_name or "upload.bin"
+ 
+ 
++def list_result_files(job_id: str) -> list[str]:
++    if not is_safe_path_component(job_id):
++        return []
++    job_dir = get_results_dir() / job_id
++    if not job_dir.is_dir():
++        return []
++    return sorted(path.name for path in job_dir.iterdir() if path.is_file())
++
++
++def build_results_index(jobs: list[JobRecord]) -> dict[str, list[str]]:
++    return {job.id: list_result_files(job.id) for job in jobs}
++
++
+ def new_job_record(job_id: str, filename: str, upload_path: Path) -> JobRecord:
+     return JobRecord(
+         id=job_id,
+@@ -68,10 +85,11 @@
+ 
+ @app.get("/", response_class=HTMLResponse)
+ def read_root(request: Request):
++    jobs = get_job_store()
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": get_job_store()},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
+ 
+ 
+@@ -100,5 +118,25 @@
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": jobs},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
++
++
++@app.get("/results/{job_id}/{filename}")
++def download_result(job_id: str, filename: str):
++    if not is_safe_path_component(job_id) or not is_safe_path_component(filename):
++        raise HTTPException(status_code=404)
++
++    results_dir = get_results_dir()
++    job_dir = results_dir / job_id
++    results_dir_resolved = results_dir.resolve()
++    job_dir_resolved = job_dir.resolve()
++    file_path = (job_dir / filename).resolve()
++
++    if not job_dir_resolved.is_relative_to(results_dir_resolved):
++        raise HTTPException(status_code=404)
++
++    if not file_path.is_file() or not file_path.is_relative_to(job_dir_resolved):
++        raise HTTPException(status_code=404)
++
++    return FileResponse(file_path)
+diff --git a/mlx_ui/templates/index.html b/mlx_ui/templates/index.html
+index fd98aea99956baf4d5692b9960df62df84cbc6a5..6af02f106d99e68b998bd306ba7733a343867dfe
+--- a/mlx_ui/templates/index.html
++++ b/mlx_ui/templates/index.html
+@@ -215,6 +215,66 @@
+         align-self: center;
+       }
+ 
++      .results {
++        margin-top: 10px;
++      }
++
++      .result-label {
++        font-size: 0.7rem;
++        text-transform: uppercase;
++        letter-spacing: 0.12em;
++        color: var(--accent-strong);
++      }
++
++      .result-list {
++        list-style: none;
++        margin: 6px 0 0;
++        padding: 0;
++        display: grid;
++        gap: 6px;
++      }
++
++      .result-item {
++        display: flex;
++        align-items: center;
++        gap: 10px;
++        flex-wrap: wrap;
++      }
++
++      .result-link {
++        color: var(--accent-strong);
++        text-decoration: none;
++        font-weight: 600;
++      }
++
++      .result-link:hover {
++        text-decoration: underline;
++      }
++
++      .result-link.is-text {
++        color: var(--accent);
++      }
++
++      .result-action {
++        font-size: 0.78rem;
++        color: var(--ink-muted);
++        text-decoration: none;
++        border: 1px solid #f1e2d2;
++        padding: 2px 8px;
++        border-radius: 999px;
++      }
++
++      .result-action:hover {
++        color: var(--accent-strong);
++        border-color: var(--accent);
++      }
++
++      .result-empty {
++        margin-top: 6px;
++        font-size: 0.85rem;
++        color: var(--ink-muted);
++      }
++
+       .placeholder {
+         margin-top: 16px;
+         padding-top: 16px;
+@@ -363,6 +423,35 @@
+                     <div>
+                       <div class="job-name">{{ job.filename }}</div>
+                       <div class="job-meta">Added {{ job.created_at }}</div>
++                      <div class="results">
++                        <div class="result-label">Results</div>
++                        {% set results = results_by_job.get(job.id, []) %}
++                        {% if results %}
++                          <ul class="result-list">
++                            {% for result in results %}
++                              <li class="result-item">
++                                <a
++                                  class="result-link{% if result.endswith('.txt') %} is-text{% endif %}"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  target="_blank"
++                                  rel="noopener"
++                                >
++                                  {{ result }}
++                                </a>
++                                <a
++                                  class="result-action"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  download="{{ result }}"
++                                >
++                                  Download
++                                </a>
++                              </li>
++                            {% endfor %}
++                          </ul>
++                        {% else %}
++                          <div class="result-empty">No results yet.</div>
++                        {% endif %}
++                      </div>
+                     </div>
+                     <div class="job-status">{{ job.status }}</div>
+                   </div>
+diff --git a/tests/test_app.py b/tests/test_app.py
+index 424ed321663b2a88c1574b6de2e4c46f0cd1ad12..21abb10479f7ea2afcf3d372db776286935ecf9b
+--- a/tests/test_app.py
++++ b/tests/test_app.py
+@@ -1,9 +1,10 @@
++from datetime import datetime, timezone
+ from pathlib import Path
+ 
+ from fastapi.testclient import TestClient
+ 
+ from mlx_ui.app import app
+-from mlx_ui.db import list_jobs
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+ 
+ 
+ def _configure_app(tmp_path: Path) -> None:
+@@ -62,3 +63,42 @@
+     jobs = list_jobs(Path(app.state.db_path))
+     assert len(jobs) == 1
+     assert "alpha.txt" in response.text
++
++
++def test_history_lists_results_and_download_endpoint(tmp_path: Path) -> None:
++    _configure_app(tmp_path)
++    db_path = Path(app.state.db_path)
++    init_db(db_path)
++
++    job_id = "job-123"
++    uploads_dir = Path(app.state.uploads_dir) / job_id
++    uploads_dir.mkdir(parents=True, exist_ok=True)
++    upload_path = uploads_dir / "alpha.txt"
++    upload_path.write_text("data", encoding="utf-8")
++
++    job = JobRecord(
++        id=job_id,
++        filename="alpha.txt",
++        status="done",
++        created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
++        upload_path=str(upload_path),
++    )
++    insert_job(db_path, job)
++
++    results_dir = Path(app.state.results_dir) / job_id
++    results_dir.mkdir(parents=True, exist_ok=True)
++    txt_path = results_dir / "alpha.txt"
++    txt_path.write_text("transcript", encoding="utf-8")
++    srt_path = results_dir / "alpha.srt"
++    srt_path.write_text("subtitles", encoding="utf-8")
++
++    with TestClient(app) as client:
++        response = client.get("/")
++
++        assert response.status_code == 200
++        assert f"/results/{job_id}/alpha.txt" in response.text
++        assert f"/results/{job_id}/alpha.srt" in response.text
++
++        download = client.get(f"/results/{job_id}/alpha.txt")
++        assert download.status_code == 200
++        assert download.text == "transcript"
+
+
+thinking
+**Appending progress log with timestamp**
+
+I'm adding entries to the progress log using UTC timestamps generated via the `date -u` command through shell execution.
+exec
+/bin/zsh -lc 'timestamp=$(date -u "+%Y-%m-%dT%H:%M:%SZ"); echo "- ${timestamp} — WORKER — CODEX_ITERATION=${CODEX_ITERATION} — WUI-021 — tests: passed (make test); lint: passed (make lint)" >> .agent/progress.md' in /Users/ivankhokhlov/code/mlx-ui succeeded in 55ms:
+
+file update:
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index e18dd9889a4ce96fc96cd5ef7bd2ef082b84d27d..dd65c6065ad4525881b170522c84bcdb5d063fcf
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -3,8 +3,8 @@
+ import shutil
+ from uuid import uuid4
+ 
+-from fastapi import FastAPI, File, Request, UploadFile
+-from fastapi.responses import HTMLResponse
++from fastapi import FastAPI, File, HTTPException, Request, UploadFile
++from fastapi.responses import FileResponse, HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
+ from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+@@ -51,11 +51,28 @@
+     return uploads_dir
+ 
+ 
++def is_safe_path_component(value: str) -> bool:
++    return value not in {"", ".", ".."} and Path(value).name == value
++
++
+ def sanitize_filename(filename: str) -> str:
+     safe_name = Path(filename).name
+     return safe_name or "upload.bin"
+ 
+ 
++def list_result_files(job_id: str) -> list[str]:
++    if not is_safe_path_component(job_id):
++        return []
++    job_dir = get_results_dir() / job_id
++    if not job_dir.is_dir():
++        return []
++    return sorted(path.name for path in job_dir.iterdir() if path.is_file())
++
++
++def build_results_index(jobs: list[JobRecord]) -> dict[str, list[str]]:
++    return {job.id: list_result_files(job.id) for job in jobs}
++
++
+ def new_job_record(job_id: str, filename: str, upload_path: Path) -> JobRecord:
+     return JobRecord(
+         id=job_id,
+@@ -68,10 +85,11 @@
+ 
+ @app.get("/", response_class=HTMLResponse)
+ def read_root(request: Request):
++    jobs = get_job_store()
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": get_job_store()},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
+ 
+ 
+@@ -100,5 +118,25 @@
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": jobs},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
++
++
++@app.get("/results/{job_id}/{filename}")
++def download_result(job_id: str, filename: str):
++    if not is_safe_path_component(job_id) or not is_safe_path_component(filename):
++        raise HTTPException(status_code=404)
++
++    results_dir = get_results_dir()
++    job_dir = results_dir / job_id
++    results_dir_resolved = results_dir.resolve()
++    job_dir_resolved = job_dir.resolve()
++    file_path = (job_dir / filename).resolve()
++
++    if not job_dir_resolved.is_relative_to(results_dir_resolved):
++        raise HTTPException(status_code=404)
++
++    if not file_path.is_file() or not file_path.is_relative_to(job_dir_resolved):
++        raise HTTPException(status_code=404)
++
++    return FileResponse(file_path)
+diff --git a/mlx_ui/templates/index.html b/mlx_ui/templates/index.html
+index fd98aea99956baf4d5692b9960df62df84cbc6a5..6af02f106d99e68b998bd306ba7733a343867dfe
+--- a/mlx_ui/templates/index.html
++++ b/mlx_ui/templates/index.html
+@@ -215,6 +215,66 @@
+         align-self: center;
+       }
+ 
++      .results {
++        margin-top: 10px;
++      }
++
++      .result-label {
++        font-size: 0.7rem;
++        text-transform: uppercase;
++        letter-spacing: 0.12em;
++        color: var(--accent-strong);
++      }
++
++      .result-list {
++        list-style: none;
++        margin: 6px 0 0;
++        padding: 0;
++        display: grid;
++        gap: 6px;
++      }
++
++      .result-item {
++        display: flex;
++        align-items: center;
++        gap: 10px;
++        flex-wrap: wrap;
++      }
++
++      .result-link {
++        color: var(--accent-strong);
++        text-decoration: none;
++        font-weight: 600;
++      }
++
++      .result-link:hover {
++        text-decoration: underline;
++      }
++
++      .result-link.is-text {
++        color: var(--accent);
++      }
++
++      .result-action {
++        font-size: 0.78rem;
++        color: var(--ink-muted);
++        text-decoration: none;
++        border: 1px solid #f1e2d2;
++        padding: 2px 8px;
++        border-radius: 999px;
++      }
++
++      .result-action:hover {
++        color: var(--accent-strong);
++        border-color: var(--accent);
++      }
++
++      .result-empty {
++        margin-top: 6px;
++        font-size: 0.85rem;
++        color: var(--ink-muted);
++      }
++
+       .placeholder {
+         margin-top: 16px;
+         padding-top: 16px;
+@@ -363,6 +423,35 @@
+                     <div>
+                       <div class="job-name">{{ job.filename }}</div>
+                       <div class="job-meta">Added {{ job.created_at }}</div>
++                      <div class="results">
++                        <div class="result-label">Results</div>
++                        {% set results = results_by_job.get(job.id, []) %}
++                        {% if results %}
++                          <ul class="result-list">
++                            {% for result in results %}
++                              <li class="result-item">
++                                <a
++                                  class="result-link{% if result.endswith('.txt') %} is-text{% endif %}"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  target="_blank"
++                                  rel="noopener"
++                                >
++                                  {{ result }}
++                                </a>
++                                <a
++                                  class="result-action"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  download="{{ result }}"
++                                >
++                                  Download
++                                </a>
++                              </li>
++                            {% endfor %}
++                          </ul>
++                        {% else %}
++                          <div class="result-empty">No results yet.</div>
++                        {% endif %}
++                      </div>
+                     </div>
+                     <div class="job-status">{{ job.status }}</div>
+                   </div>
+diff --git a/tests/test_app.py b/tests/test_app.py
+index 424ed321663b2a88c1574b6de2e4c46f0cd1ad12..21abb10479f7ea2afcf3d372db776286935ecf9b
+--- a/tests/test_app.py
++++ b/tests/test_app.py
+@@ -1,9 +1,10 @@
++from datetime import datetime, timezone
+ from pathlib import Path
+ 
+ from fastapi.testclient import TestClient
+ 
+ from mlx_ui.app import app
+-from mlx_ui.db import list_jobs
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+ 
+ 
+ def _configure_app(tmp_path: Path) -> None:
+@@ -62,3 +63,42 @@
+     jobs = list_jobs(Path(app.state.db_path))
+     assert len(jobs) == 1
+     assert "alpha.txt" in response.text
++
++
++def test_history_lists_results_and_download_endpoint(tmp_path: Path) -> None:
++    _configure_app(tmp_path)
++    db_path = Path(app.state.db_path)
++    init_db(db_path)
++
++    job_id = "job-123"
++    uploads_dir = Path(app.state.uploads_dir) / job_id
++    uploads_dir.mkdir(parents=True, exist_ok=True)
++    upload_path = uploads_dir / "alpha.txt"
++    upload_path.write_text("data", encoding="utf-8")
++
++    job = JobRecord(
++        id=job_id,
++        filename="alpha.txt",
++        status="done",
++        created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
++        upload_path=str(upload_path),
++    )
++    insert_job(db_path, job)
++
++    results_dir = Path(app.state.results_dir) / job_id
++    results_dir.mkdir(parents=True, exist_ok=True)
++    txt_path = results_dir / "alpha.txt"
++    txt_path.write_text("transcript", encoding="utf-8")
++    srt_path = results_dir / "alpha.srt"
++    srt_path.write_text("subtitles", encoding="utf-8")
++
++    with TestClient(app) as client:
++        response = client.get("/")
++
++        assert response.status_code == 200
++        assert f"/results/{job_id}/alpha.txt" in response.text
++        assert f"/results/{job_id}/alpha.srt" in response.text
++
++        download = client.get(f"/results/{job_id}/alpha.txt")
++        assert download.status_code == 200
++        assert download.text == "transcript"
+
+
+thinking
+**Confirming changes and preparing final summary**
+
+I'm verifying that `.agent/BLOCKED` is unchanged and planning to summarize implemented changes with file references and test results, including pointers to worker reports and logs for the final response. I'll also confirm changes via `git status -sb` and optionally `git diff` to ensure accuracy before finalizing.
+exec
+/bin/zsh -lc 'git status -sb' in /Users/ivankhokhlov/code/mlx-ui succeeded in 76ms:
+## master
+ M .agent/last_judge.txt
+ M .agent/last_planner.txt
+ M .agent/logs/judge_8.err
+ M .agent/logs/judge_8.out
+ M .agent/plan.md
+ M .agent/progress.md
+ M .agent/queue.md
+ M .agent/worker_report.md
+ M mlx_ui/app.py
+ M mlx_ui/templates/index.html
+ M tests/test_app.py
+?? .agent/logs/lint_9.log
+?? .agent/logs/planner_9.err
+?? .agent/logs/planner_9.out
+?? .agent/logs/test_9.log
+?? .agent/logs/worker_9.err
+?? .agent/logs/worker_9.out
+?? data/
+file update:
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index e18dd9889a4ce96fc96cd5ef7bd2ef082b84d27d..dd65c6065ad4525881b170522c84bcdb5d063fcf
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -3,8 +3,8 @@
+ import shutil
+ from uuid import uuid4
+ 
+-from fastapi import FastAPI, File, Request, UploadFile
+-from fastapi.responses import HTMLResponse
++from fastapi import FastAPI, File, HTTPException, Request, UploadFile
++from fastapi.responses import FileResponse, HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
+ from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+@@ -51,11 +51,28 @@
+     return uploads_dir
+ 
+ 
++def is_safe_path_component(value: str) -> bool:
++    return value not in {"", ".", ".."} and Path(value).name == value
++
++
+ def sanitize_filename(filename: str) -> str:
+     safe_name = Path(filename).name
+     return safe_name or "upload.bin"
+ 
+ 
++def list_result_files(job_id: str) -> list[str]:
++    if not is_safe_path_component(job_id):
++        return []
++    job_dir = get_results_dir() / job_id
++    if not job_dir.is_dir():
++        return []
++    return sorted(path.name for path in job_dir.iterdir() if path.is_file())
++
++
++def build_results_index(jobs: list[JobRecord]) -> dict[str, list[str]]:
++    return {job.id: list_result_files(job.id) for job in jobs}
++
++
+ def new_job_record(job_id: str, filename: str, upload_path: Path) -> JobRecord:
+     return JobRecord(
+         id=job_id,
+@@ -68,10 +85,11 @@
+ 
+ @app.get("/", response_class=HTMLResponse)
+ def read_root(request: Request):
++    jobs = get_job_store()
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": get_job_store()},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
+ 
+ 
+@@ -100,5 +118,25 @@
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": jobs},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
++
++
++@app.get("/results/{job_id}/{filename}")
++def download_result(job_id: str, filename: str):
++    if not is_safe_path_component(job_id) or not is_safe_path_component(filename):
++        raise HTTPException(status_code=404)
++
++    results_dir = get_results_dir()
++    job_dir = results_dir / job_id
++    results_dir_resolved = results_dir.resolve()
++    job_dir_resolved = job_dir.resolve()
++    file_path = (job_dir / filename).resolve()
++
++    if not job_dir_resolved.is_relative_to(results_dir_resolved):
++        raise HTTPException(status_code=404)
++
++    if not file_path.is_file() or not file_path.is_relative_to(job_dir_resolved):
++        raise HTTPException(status_code=404)
++
++    return FileResponse(file_path)
+diff --git a/mlx_ui/templates/index.html b/mlx_ui/templates/index.html
+index fd98aea99956baf4d5692b9960df62df84cbc6a5..6af02f106d99e68b998bd306ba7733a343867dfe
+--- a/mlx_ui/templates/index.html
++++ b/mlx_ui/templates/index.html
+@@ -215,6 +215,66 @@
+         align-self: center;
+       }
+ 
++      .results {
++        margin-top: 10px;
++      }
++
++      .result-label {
++        font-size: 0.7rem;
++        text-transform: uppercase;
++        letter-spacing: 0.12em;
++        color: var(--accent-strong);
++      }
++
++      .result-list {
++        list-style: none;
++        margin: 6px 0 0;
++        padding: 0;
++        display: grid;
++        gap: 6px;
++      }
++
++      .result-item {
++        display: flex;
++        align-items: center;
++        gap: 10px;
++        flex-wrap: wrap;
++      }
++
++      .result-link {
++        color: var(--accent-strong);
++        text-decoration: none;
++        font-weight: 600;
++      }
++
++      .result-link:hover {
++        text-decoration: underline;
++      }
++
++      .result-link.is-text {
++        color: var(--accent);
++      }
++
++      .result-action {
++        font-size: 0.78rem;
++        color: var(--ink-muted);
++        text-decoration: none;
++        border: 1px solid #f1e2d2;
++        padding: 2px 8px;
++        border-radius: 999px;
++      }
++
++      .result-action:hover {
++        color: var(--accent-strong);
++        border-color: var(--accent);
++      }
++
++      .result-empty {
++        margin-top: 6px;
++        font-size: 0.85rem;
++        color: var(--ink-muted);
++      }
++
+       .placeholder {
+         margin-top: 16px;
+         padding-top: 16px;
+@@ -363,6 +423,35 @@
+                     <div>
+                       <div class="job-name">{{ job.filename }}</div>
+                       <div class="job-meta">Added {{ job.created_at }}</div>
++                      <div class="results">
++                        <div class="result-label">Results</div>
++                        {% set results = results_by_job.get(job.id, []) %}
++                        {% if results %}
++                          <ul class="result-list">
++                            {% for result in results %}
++                              <li class="result-item">
++                                <a
++                                  class="result-link{% if result.endswith('.txt') %} is-text{% endif %}"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  target="_blank"
++                                  rel="noopener"
++                                >
++                                  {{ result }}
++                                </a>
++                                <a
++                                  class="result-action"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  download="{{ result }}"
++                                >
++                                  Download
++                                </a>
++                              </li>
++                            {% endfor %}
++                          </ul>
++                        {% else %}
++                          <div class="result-empty">No results yet.</div>
++                        {% endif %}
++                      </div>
+                     </div>
+                     <div class="job-status">{{ job.status }}</div>
+                   </div>
+diff --git a/tests/test_app.py b/tests/test_app.py
+index 424ed321663b2a88c1574b6de2e4c46f0cd1ad12..21abb10479f7ea2afcf3d372db776286935ecf9b
+--- a/tests/test_app.py
++++ b/tests/test_app.py
+@@ -1,9 +1,10 @@
++from datetime import datetime, timezone
+ from pathlib import Path
+ 
+ from fastapi.testclient import TestClient
+ 
+ from mlx_ui.app import app
+-from mlx_ui.db import list_jobs
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+ 
+ 
+ def _configure_app(tmp_path: Path) -> None:
+@@ -62,3 +63,42 @@
+     jobs = list_jobs(Path(app.state.db_path))
+     assert len(jobs) == 1
+     assert "alpha.txt" in response.text
++
++
++def test_history_lists_results_and_download_endpoint(tmp_path: Path) -> None:
++    _configure_app(tmp_path)
++    db_path = Path(app.state.db_path)
++    init_db(db_path)
++
++    job_id = "job-123"
++    uploads_dir = Path(app.state.uploads_dir) / job_id
++    uploads_dir.mkdir(parents=True, exist_ok=True)
++    upload_path = uploads_dir / "alpha.txt"
++    upload_path.write_text("data", encoding="utf-8")
++
++    job = JobRecord(
++        id=job_id,
++        filename="alpha.txt",
++        status="done",
++        created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
++        upload_path=str(upload_path),
++    )
++    insert_job(db_path, job)
++
++    results_dir = Path(app.state.results_dir) / job_id
++    results_dir.mkdir(parents=True, exist_ok=True)
++    txt_path = results_dir / "alpha.txt"
++    txt_path.write_text("transcript", encoding="utf-8")
++    srt_path = results_dir / "alpha.srt"
++    srt_path.write_text("subtitles", encoding="utf-8")
++
++    with TestClient(app) as client:
++        response = client.get("/")
++
++        assert response.status_code == 200
++        assert f"/results/{job_id}/alpha.txt" in response.text
++        assert f"/results/{job_id}/alpha.srt" in response.text
++
++        download = client.get(f"/results/{job_id}/alpha.txt")
++        assert download.status_code == 200
++        assert download.text == "transcript"
+
+
+
+thinking
+**Summarizing final context and suggestion approach**
+
+The .agent directory contains some unrelated or previous modifications that should not be reverted or mentioned, and untracked data/ likely from earlier tests is expected and ignored. The final response will clearly explain the relevant changes and, if natural, include a brief numeric list of optional next steps such as manually running the app or checking history.
+thinking
+**Summarizing implemented changes and testing**
+
+Added result file indexing and a safe `/results/{job_id}/{filename}` endpoint, and wired the History UI to show per-job result links with view/download actions. In `mlx_ui/app.py`, results are indexed per job and the download route guards against path traversal; `mlx_ui/templates/index.html` now renders result links with a TXT emphasis in the History panel; and `tests/test_app.py` seeds result data and asserts both link rendering and file delivery.
+
+- Tests: `make test` (pass), `make lint` (pass)  
+- Logs: `.agent/logs/test_9.log`, `.agent/logs/lint_9.log`  
+- Report: `.agent/worker_report.md`
+
+Next steps:  
+1. Run `make run` and click the History tab to verify result links open or download as expected.
+codex
+Added result file indexing and a safe `/results/{job_id}/{filename}` endpoint, and wired History to show per‑job result links with view/download actions. In `mlx_ui/app.py` the results list is built per job and the download route guards against path traversal; in `mlx_ui/templates/index.html` the History panel renders result lists with TXT emphasis; in `tests/test_app.py` a new test seeds results and asserts link rendering plus file delivery.
+
+Tests: `make test` (pass), `make lint` (pass).  
+Logs: `.agent/logs/test_9.log`, `.agent/logs/lint_9.log`.  
+Report: `.agent/worker_report.md`.
+
+Next steps:
+1. `make run` and click History to verify links open/download as expected.
+file update:
+diff --git a/mlx_ui/app.py b/mlx_ui/app.py
+index e18dd9889a4ce96fc96cd5ef7bd2ef082b84d27d..dd65c6065ad4525881b170522c84bcdb5d063fcf
+--- a/mlx_ui/app.py
++++ b/mlx_ui/app.py
+@@ -3,8 +3,8 @@
+ import shutil
+ from uuid import uuid4
+ 
+-from fastapi import FastAPI, File, Request, UploadFile
+-from fastapi.responses import HTMLResponse
++from fastapi import FastAPI, File, HTTPException, Request, UploadFile
++from fastapi.responses import FileResponse, HTMLResponse
+ from fastapi.templating import Jinja2Templates
+ 
+ from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+@@ -51,11 +51,28 @@
+     return uploads_dir
+ 
+ 
++def is_safe_path_component(value: str) -> bool:
++    return value not in {"", ".", ".."} and Path(value).name == value
++
++
+ def sanitize_filename(filename: str) -> str:
+     safe_name = Path(filename).name
+     return safe_name or "upload.bin"
+ 
+ 
++def list_result_files(job_id: str) -> list[str]:
++    if not is_safe_path_component(job_id):
++        return []
++    job_dir = get_results_dir() / job_id
++    if not job_dir.is_dir():
++        return []
++    return sorted(path.name for path in job_dir.iterdir() if path.is_file())
++
++
++def build_results_index(jobs: list[JobRecord]) -> dict[str, list[str]]:
++    return {job.id: list_result_files(job.id) for job in jobs}
++
++
+ def new_job_record(job_id: str, filename: str, upload_path: Path) -> JobRecord:
+     return JobRecord(
+         id=job_id,
+@@ -68,10 +85,11 @@
+ 
+ @app.get("/", response_class=HTMLResponse)
+ def read_root(request: Request):
++    jobs = get_job_store()
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": get_job_store()},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
+ 
+ 
+@@ -100,5 +118,25 @@
+     return templates.TemplateResponse(
+         request,
+         "index.html",
+-        {"jobs": jobs},
++        {"jobs": jobs, "results_by_job": build_results_index(jobs)},
+     )
++
++
++@app.get("/results/{job_id}/{filename}")
++def download_result(job_id: str, filename: str):
++    if not is_safe_path_component(job_id) or not is_safe_path_component(filename):
++        raise HTTPException(status_code=404)
++
++    results_dir = get_results_dir()
++    job_dir = results_dir / job_id
++    results_dir_resolved = results_dir.resolve()
++    job_dir_resolved = job_dir.resolve()
++    file_path = (job_dir / filename).resolve()
++
++    if not job_dir_resolved.is_relative_to(results_dir_resolved):
++        raise HTTPException(status_code=404)
++
++    if not file_path.is_file() or not file_path.is_relative_to(job_dir_resolved):
++        raise HTTPException(status_code=404)
++
++    return FileResponse(file_path)
+diff --git a/mlx_ui/templates/index.html b/mlx_ui/templates/index.html
+index fd98aea99956baf4d5692b9960df62df84cbc6a5..6af02f106d99e68b998bd306ba7733a343867dfe
+--- a/mlx_ui/templates/index.html
++++ b/mlx_ui/templates/index.html
+@@ -215,6 +215,66 @@
+         align-self: center;
+       }
+ 
++      .results {
++        margin-top: 10px;
++      }
++
++      .result-label {
++        font-size: 0.7rem;
++        text-transform: uppercase;
++        letter-spacing: 0.12em;
++        color: var(--accent-strong);
++      }
++
++      .result-list {
++        list-style: none;
++        margin: 6px 0 0;
++        padding: 0;
++        display: grid;
++        gap: 6px;
++      }
++
++      .result-item {
++        display: flex;
++        align-items: center;
++        gap: 10px;
++        flex-wrap: wrap;
++      }
++
++      .result-link {
++        color: var(--accent-strong);
++        text-decoration: none;
++        font-weight: 600;
++      }
++
++      .result-link:hover {
++        text-decoration: underline;
++      }
++
++      .result-link.is-text {
++        color: var(--accent);
++      }
++
++      .result-action {
++        font-size: 0.78rem;
++        color: var(--ink-muted);
++        text-decoration: none;
++        border: 1px solid #f1e2d2;
++        padding: 2px 8px;
++        border-radius: 999px;
++      }
++
++      .result-action:hover {
++        color: var(--accent-strong);
++        border-color: var(--accent);
++      }
++
++      .result-empty {
++        margin-top: 6px;
++        font-size: 0.85rem;
++        color: var(--ink-muted);
++      }
++
+       .placeholder {
+         margin-top: 16px;
+         padding-top: 16px;
+@@ -363,6 +423,35 @@
+                     <div>
+                       <div class="job-name">{{ job.filename }}</div>
+                       <div class="job-meta">Added {{ job.created_at }}</div>
++                      <div class="results">
++                        <div class="result-label">Results</div>
++                        {% set results = results_by_job.get(job.id, []) %}
++                        {% if results %}
++                          <ul class="result-list">
++                            {% for result in results %}
++                              <li class="result-item">
++                                <a
++                                  class="result-link{% if result.endswith('.txt') %} is-text{% endif %}"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  target="_blank"
++                                  rel="noopener"
++                                >
++                                  {{ result }}
++                                </a>
++                                <a
++                                  class="result-action"
++                                  href="/results/{{ job.id }}/{{ result }}"
++                                  download="{{ result }}"
++                                >
++                                  Download
++                                </a>
++                              </li>
++                            {% endfor %}
++                          </ul>
++                        {% else %}
++                          <div class="result-empty">No results yet.</div>
++                        {% endif %}
++                      </div>
+                     </div>
+                     <div class="job-status">{{ job.status }}</div>
+                   </div>
+diff --git a/tests/test_app.py b/tests/test_app.py
+index 424ed321663b2a88c1574b6de2e4c46f0cd1ad12..21abb10479f7ea2afcf3d372db776286935ecf9b
+--- a/tests/test_app.py
++++ b/tests/test_app.py
+@@ -1,9 +1,10 @@
++from datetime import datetime, timezone
+ from pathlib import Path
+ 
+ from fastapi.testclient import TestClient
+ 
+ from mlx_ui.app import app
+-from mlx_ui.db import list_jobs
++from mlx_ui.db import JobRecord, init_db, insert_job, list_jobs
+ 
+ 
+ def _configure_app(tmp_path: Path) -> None:
+@@ -62,3 +63,42 @@
+     jobs = list_jobs(Path(app.state.db_path))
+     assert len(jobs) == 1
+     assert "alpha.txt" in response.text
++
++
++def test_history_lists_results_and_download_endpoint(tmp_path: Path) -> None:
++    _configure_app(tmp_path)
++    db_path = Path(app.state.db_path)
++    init_db(db_path)
++
++    job_id = "job-123"
++    uploads_dir = Path(app.state.uploads_dir) / job_id
++    uploads_dir.mkdir(parents=True, exist_ok=True)
++    upload_path = uploads_dir / "alpha.txt"
++    upload_path.write_text("data", encoding="utf-8")
++
++    job = JobRecord(
++        id=job_id,
++        filename="alpha.txt",
++        status="done",
++        created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
++        upload_path=str(upload_path),
++    )
++    insert_job(db_path, job)
++
++    results_dir = Path(app.state.results_dir) / job_id
++    results_dir.mkdir(parents=True, exist_ok=True)
++    txt_path = results_dir / "alpha.txt"
++    txt_path.write_text("transcript", encoding="utf-8")
++    srt_path = results_dir / "alpha.srt"
++    srt_path.write_text("subtitles", encoding="utf-8")
++
++    with TestClient(app) as client:
++        response = client.get("/")
++
++        assert response.status_code == 200
++        assert f"/results/{job_id}/alpha.txt" in response.text
++        assert f"/results/{job_id}/alpha.srt" in response.text
++
++        download = client.get(f"/results/{job_id}/alpha.txt")
++        assert download.status_code == 200
++        assert download.text == "transcript"
+
+tokens used
+41,172

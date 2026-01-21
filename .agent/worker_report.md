@@ -1,18 +1,16 @@
 # Worker Report
 
-Task: WUI-020 - Integrate `wtm` CLI transcription
+Task: WUI-021 — Results browsing + download
 
 What changed:
-- Added a WTM-backed transcriber that builds the CLI command with language/output dir and validates TXT output.
-- Switched the worker default transcriber to the WTM implementation.
-- Added a subprocess-mocked transcriber test to avoid running the real model.
-- Updated the project tree docs to include the new test file.
+- Added result file indexing plus a safe download endpoint.
+- Rendered per-job result links with view/download actions in History.
+- Added tests covering history links and the results endpoint.
 
 Files changed:
-- mlx_ui/transcriber.py
-- mlx_ui/worker.py
-- tests/test_transcriber.py
-- docs/tree.md
+- mlx_ui/app.py
+- mlx_ui/templates/index.html
+- tests/test_app.py
 
 Commands run:
 - make test (pass)

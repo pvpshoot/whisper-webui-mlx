@@ -1,25 +1,23 @@
 # Plan
 
-Task: WUI-020 — Integrate `wtm` CLI transcription
+Task: WUI-021 — Results browsing + download
 
-Acceptance: for a job, system runs `wtm` with chosen language and produces at least `.txt` in `data/results/<job_id>/`
+Acceptance: history page shows per-job links to view/download TXT and other generated formats
 
 Assumptions:
-- `wtm` is installed and available on PATH (or a configurable path), and the model has been downloaded.
-- Tests should not invoke the real ML model; subprocess calls will be mocked.
+- Results live under `data/results/<job_id>/` and are safe to expose via file download routes.
+- Job history already exists and includes job IDs that map to results directories.
 
 Implementation steps:
-- Inspect the current transcriber interface and worker flow to locate where to swap the fake transcriber for a CLI-backed implementation.
-- Implement a `wtm`-backed transcriber that builds the CLI command with the selected language and output directory, captures errors, and writes results under `data/results/<job_id>/`.
-- Ensure the worker uses the new transcriber path and records failures cleanly without breaking the queue.
-- Add configuration hooks if needed (e.g., optional `WTM_PATH`) and keep logs readable while avoiding secret exposure.
-- Update tests to mock subprocess execution, create a fake `.txt` result, and assert job status/result paths without running the model.
+- Review current history rendering in `mlx_ui/templates/index.html` and job metadata access in `mlx_ui/app.py` to confirm what fields are available per job.
+- Add a helper to list result files for a job by scanning `data/results/<job_id>/`, filtering non-files, and sorting deterministically.
+- Add a download/view endpoint (e.g., `/results/{job_id}/{filename}`) using `FileResponse`, with path traversal protection and 404 for missing files.
+- Update the History section in the template to show per-job lists of result links (TXT emphasized) and a “no results yet” fallback.
+- Extend tests to create fake result files and assert history renders links and download endpoints return file content.
 
 Files likely to touch:
-- `mlx_ui/transcriber.py`
-- `mlx_ui/worker.py`
 - `mlx_ui/app.py`
-- `tests/test_worker.py`
+- `mlx_ui/templates/index.html`
 - `tests/test_app.py`
 
 Verification steps:

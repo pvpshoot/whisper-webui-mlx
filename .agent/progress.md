@@ -25,3 +25,6 @@
 - 2026-01-21T12:13:35Z — PLANNER — CODEX_ITERATION=8 — selected WUI-020 (Integrate `wtm` CLI transcription). Queue updated (moved WUI-020 to Now).
 - 2026-01-21T12:19:43Z — WORKER — CODEX_ITERATION=8 — WUI-020 — tests: passed (make test); lint: passed (make lint)
 - 2026-01-21T12:24:16Z — JUDGE — CODEX_ITERATION=8 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
+- 2026-01-21T12:29:53Z — PLANNER — CODEX_ITERATION=9 — selected WUI-021 (Results browsing + download). Queue updated (moved WUI-021 to Now).
+- 2026-01-21T12:36:14Z — WORKER — CODEX_ITERATION=9 — WUI-021 — tests: passed (make test); lint: passed (make lint)
+- 2026-01-21T12:39:05Z — JUDGE — CODEX_ITERATION=9 — PASS — acceptance met; tests: passed (make test); lint: not rerun (judge)

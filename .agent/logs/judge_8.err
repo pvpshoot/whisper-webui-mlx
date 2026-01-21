@@ -1482,4 +1482,335 @@ thinking
 
 I'm confirming to stage all changes and new files under `.agent`, `docs`, `mlx_ui`, and `tests`—including new `.agent/logs/judge_8.*` and the new test file—while excluding the untracked top-level `data/` directory. I'll proceed with `git add .agent docs mlx_ui tests` to prepare for commit.
 exec
-/bin/zsh -lc 'git add .agent docs mlx_ui tests' in /Users/ivankhokhlov/code/mlx-ui
+/bin/zsh -lc 'git add .agent docs mlx_ui tests' in /Users/ivankhokhlov/code/mlx-ui succeeded in 103ms:
+
+file update:
+diff --git a/.agent/judge_feedback.md b/.agent/judge_feedback.md
+index edeee188669491702e9d3a27dc00c2e229489fb0..8509813cbe0fd782219471d78d50f461e9632e64
+--- a/.agent/judge_feedback.md
++++ b/.agent/judge_feedback.md
+@@ -3,4 +3,4 @@
+ Notes:
+ - `make test` passes (rerun).
+ - `make lint` not rerun; worker reported pass.
+-- Acceptance criteria met for WUI-012.
++- Acceptance criteria met for WUI-020.
+diff --git a/.agent/progress.md b/.agent/progress.md
+index 257d09594aba3628cbdce89f9c710fe1663e2069..1c72e6bd59959806310d020ae2d5428a615d032e
+--- a/.agent/progress.md
++++ b/.agent/progress.md
+@@ -24,3 +24,4 @@
+ - 2026-01-21T12:08:25Z — JUDGE — CODEX_ITERATION=7 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
+ - 2026-01-21T12:13:35Z — PLANNER — CODEX_ITERATION=8 — selected WUI-020 (Integrate `wtm` CLI transcription). Queue updated (moved WUI-020 to Now).
+ - 2026-01-21T12:19:43Z — WORKER — CODEX_ITERATION=8 — WUI-020 — tests: passed (make test); lint: passed (make lint)
++- 2026-01-21T12:24:16Z — JUDGE — CODEX_ITERATION=8 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
+diff --git a/.agent/queue.md b/.agent/queue.md
+index 30ea8cf77621e7f45ce81a412a66aa7097465063..809a7c5b49498b73bc8e6687f06ee2eb4d6e4921
+--- a/.agent/queue.md
++++ b/.agent/queue.md
+@@ -1,7 +1,6 @@
+ # Queue
+ 
+ ## Now
+-- [ ] WUI-020 — Integrate `wtm` CLI transcription (acceptance: for a job, system runs `wtm` with chosen language and produces at least `.txt` in `data/results/<job_id>/`)
+ 
+ ## Next
+ 
+@@ -13,6 +12,7 @@
+ - [ ] WUI-090 — Live mode skeleton (acceptance: UI has “Live” page stub + technical plan in docs; no implementation yet)
+ 
+ ## Done
++- [x] WUI-020 — Integrate `wtm` CLI transcription (acceptance: for a job, system runs `wtm` with chosen language and produces at least `.txt` in `data/results/<job_id>/`)
+ - [x] WUI-012 — Sequential worker + fake transcriber (acceptance: single worker processes jobs strictly one-at-a-time; tests do not require ML model)
+ - [x] WUI-011 — Persistent job store (SQLite) (acceptance: jobs survive server restart; history page lists prior jobs)
+ - [x] WUI-010 — Upload endpoint + local storage (acceptance: user can upload multiple files; files saved under `data/uploads/` and jobs are created)
+diff --git a/.agent/state.md b/.agent/state.md
+index 4601330913812a1c8375a7683bb74615352e32ff..3363c794e6f601f097f16c3d75bbc1bedb8cb949
+--- a/.agent/state.md
++++ b/.agent/state.md
+@@ -1,3 +1,3 @@
+-last_task_id: WUI-012
++last_task_id: WUI-020
+ last_verdict: PASS
+ consecutive_failures: 0
+
+
+thinking
+**Checking for unstaged changes**
+exec
+/bin/zsh -lc 'git status --porcelain' in /Users/ivankhokhlov/code/mlx-ui succeeded in 77ms:
+M  .agent/judge_feedback.md
+M  .agent/last_judge.txt
+M  .agent/last_planner.txt
+M  .agent/last_worker.txt
+M  .agent/logs/judge_7.err
+M  .agent/logs/judge_7.out
+AM .agent/logs/judge_8.err
+A  .agent/logs/judge_8.out
+A  .agent/logs/lint_8.log
+A  .agent/logs/planner_8.err
+A  .agent/logs/planner_8.out
+A  .agent/logs/test_8.log
+A  .agent/logs/worker_8.err
+A  .agent/logs/worker_8.out
+M  .agent/plan.md
+M  .agent/progress.md
+M  .agent/queue.md
+M  .agent/state.md
+M  .agent/worker_report.md
+M  docs/tree.md
+file update:
+diff --git a/.agent/judge_feedback.md b/.agent/judge_feedback.md
+index edeee188669491702e9d3a27dc00c2e229489fb0..8509813cbe0fd782219471d78d50f461e9632e64
+--- a/.agent/judge_feedback.md
++++ b/.agent/judge_feedback.md
+@@ -3,4 +3,4 @@
+ Notes:
+ - `make test` passes (rerun).
+ - `make lint` not rerun; worker reported pass.
+-- Acceptance criteria met for WUI-012.
++- Acceptance criteria met for WUI-020.
+diff --git a/.agent/progress.md b/.agent/progress.md
+index 257d09594aba3628cbdce89f9c710fe1663e2069..1c72e6bd59959806310d020ae2d5428a615d032e
+--- a/.agent/progress.md
++++ b/.agent/progress.md
+@@ -24,3 +24,4 @@
+ - 2026-01-21T12:08:25Z — JUDGE — CODEX_ITERATION=7 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
+ - 2026-01-21T12:13:35Z — PLANNER — CODEX_ITERATION=8 — selected WUI-020 (Integrate `wtm` CLI transcription). Queue updated (moved WUI-020 to Now).
+ - 2026-01-21T12:19:43Z — WORKER — CODEX_ITERATION=8 — WUI-020 — tests: passed (make test); lint: passed (make lint)
++- 2026-01-21T12:24:16Z — JUDGE — CODEX_ITERATION=8 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
+diff --git a/.agent/queue.md b/.agent/queue.md
+index 30ea8cf77621e7f45ce81a412a66aa7097465063..809a7c5b49498b73bc8e6687f06ee2eb4d6e4921
+--- a/.agent/queue.md
++++ b/.agent/queue.md
+@@ -1,7 +1,6 @@
+ # Queue
+ 
+ ## Now
+-- [ ] WUI-020 — Integrate `wtm` CLI transcription (acceptance: for a job, system runs `wtm` with chosen language and produces at least `.txt` in `data/results/<job_id>/`)
+ 
+ ## Next
+ 
+@@ -13,6 +12,7 @@
+ - [ ] WUI-090 — Live mode skeleton (acceptance: UI has “Live” page stub + technical plan in docs; no implementation yet)
+ 
+ ## Done
++- [x] WUI-020 — Integrate `wtm` CLI transcription (acceptance: for a job, system runs `wtm` with chosen language and produces at least `.txt` in `data/results/<job_id>/`)
+ - [x] WUI-012 — Sequential worker + fake transcriber (acceptance: single worker processes jobs strictly one-at-a-time; tests do not require ML model)
+ - [x] WUI-011 — Persistent job store (SQLite) (acceptance: jobs survive server restart; history page lists prior jobs)
+ - [x] WUI-010 — Upload endpoint + local storage (acceptance: user can upload multiple files; files saved under `data/uploads/` and jobs are created)
+diff --git a/.agent/state.md b/.agent/state.md
+index 4601330913812a1c8375a7683bb74615352e32ff..3363c794e6f601f097f16c3d75bbc1bedb8cb949
+--- a/.agent/state.md
++++ b/.agent/state.md
+@@ -1,3 +1,3 @@
+-last_task_id: WUI-012
++last_task_id: WUI-020
+ last_verdict: PASS
+ consecutive_failures: 0
+
+
+
+thinking
+**Confirming staged modifications before commit**
+
+The key staged files include updated log files, some still being appended after staging, which is expected. I'll proceed to commit with the given message since tests passed and further linting isn't needed now.
+thinking
+**Verifying post-commit status update**
+
+The .agent/last_judge file correctly reflects the expected repo status after commit, including ongoing modifications to log files, so it can remain as is before proceeding with the commit.
+exec
+/bin/zsh -lc 'git commit -m "WUI-020: Integrate wtm CLI transcription"' in /Users/ivankhokhlov/code/mlx-ui succeeded in 85ms:
+[master 1954a73] WUI-020: Integrate wtm CLI transcription
+ 23 files changed, 6840 insertions(+), 52 deletions(-)
+ create mode 100644 .agent/logs/judge_8.err
+ create mode 100644 .agent/logs/judge_8.out
+ create mode 100644 .agent/logs/lint_8.log
+ create mode 100644 .agent/logs/planner_8.err
+ create mode 100644 .agent/logs/planner_8.out
+ create mode 100644 .agent/logs/test_8.log
+ create mode 100644 .agent/logs/worker_8.err
+ create mode 100644 .agent/logs/worker_8.out
+ create mode 100644 tests/test_transcriber.py
+file update:
+diff --git a/.agent/judge_feedback.md b/.agent/judge_feedback.md
+index edeee188669491702e9d3a27dc00c2e229489fb0..8509813cbe0fd782219471d78d50f461e9632e64
+--- a/.agent/judge_feedback.md
++++ b/.agent/judge_feedback.md
+@@ -3,4 +3,4 @@
+ Notes:
+ - `make test` passes (rerun).
+ - `make lint` not rerun; worker reported pass.
+-- Acceptance criteria met for WUI-012.
++- Acceptance criteria met for WUI-020.
+diff --git a/.agent/progress.md b/.agent/progress.md
+index 257d09594aba3628cbdce89f9c710fe1663e2069..1c72e6bd59959806310d020ae2d5428a615d032e
+--- a/.agent/progress.md
++++ b/.agent/progress.md
+@@ -24,3 +24,4 @@
+ - 2026-01-21T12:08:25Z — JUDGE — CODEX_ITERATION=7 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
+ - 2026-01-21T12:13:35Z — PLANNER — CODEX_ITERATION=8 — selected WUI-020 (Integrate `wtm` CLI transcription). Queue updated (moved WUI-020 to Now).
+ - 2026-01-21T12:19:43Z — WORKER — CODEX_ITERATION=8 — WUI-020 — tests: passed (make test); lint: passed (make lint)
++- 2026-01-21T12:24:16Z — JUDGE — CODEX_ITERATION=8 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
+diff --git a/.agent/queue.md b/.agent/queue.md
+index 30ea8cf77621e7f45ce81a412a66aa7097465063..809a7c5b49498b73bc8e6687f06ee2eb4d6e4921
+--- a/.agent/queue.md
++++ b/.agent/queue.md
+@@ -1,7 +1,6 @@
+ # Queue
+ 
+ ## Now
+-- [ ] WUI-020 — Integrate `wtm` CLI transcription (acceptance: for a job, system runs `wtm` with chosen language and produces at least `.txt` in `data/results/<job_id>/`)
+ 
+ ## Next
+ 
+@@ -13,6 +12,7 @@
+ - [ ] WUI-090 — Live mode skeleton (acceptance: UI has “Live” page stub + technical plan in docs; no implementation yet)
+ 
+ ## Done
++- [x] WUI-020 — Integrate `wtm` CLI transcription (acceptance: for a job, system runs `wtm` with chosen language and produces at least `.txt` in `data/results/<job_id>/`)
+ - [x] WUI-012 — Sequential worker + fake transcriber (acceptance: single worker processes jobs strictly one-at-a-time; tests do not require ML model)
+ - [x] WUI-011 — Persistent job store (SQLite) (acceptance: jobs survive server restart; history page lists prior jobs)
+ - [x] WUI-010 — Upload endpoint + local storage (acceptance: user can upload multiple files; files saved under `data/uploads/` and jobs are created)
+diff --git a/.agent/state.md b/.agent/state.md
+index 4601330913812a1c8375a7683bb74615352e32ff..3363c794e6f601f097f16c3d75bbc1bedb8cb949
+--- a/.agent/state.md
++++ b/.agent/state.md
+@@ -1,3 +1,3 @@
+-last_task_id: WUI-012
++last_task_id: WUI-020
+ last_verdict: PASS
+ consecutive_failures: 0
+
+
+thinking
+**Checking post-commit git status**
+exec
+/bin/zsh -lc 'git status --porcelain' in /Users/ivankhokhlov/code/mlx-ui succeeded in 74ms:
+ M .agent/logs/judge_8.err
+?? data/
+file update:
+diff --git a/.agent/judge_feedback.md b/.agent/judge_feedback.md
+index edeee188669491702e9d3a27dc00c2e229489fb0..8509813cbe0fd782219471d78d50f461e9632e64
+--- a/.agent/judge_feedback.md
++++ b/.agent/judge_feedback.md
+@@ -3,4 +3,4 @@
+ Notes:
+ - `make test` passes (rerun).
+ - `make lint` not rerun; worker reported pass.
+-- Acceptance criteria met for WUI-012.
++- Acceptance criteria met for WUI-020.
+diff --git a/.agent/progress.md b/.agent/progress.md
+index 257d09594aba3628cbdce89f9c710fe1663e2069..1c72e6bd59959806310d020ae2d5428a615d032e
+--- a/.agent/progress.md
++++ b/.agent/progress.md
+@@ -24,3 +24,4 @@
+ - 2026-01-21T12:08:25Z — JUDGE — CODEX_ITERATION=7 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
+ - 2026-01-21T12:13:35Z — PLANNER — CODEX_ITERATION=8 — selected WUI-020 (Integrate `wtm` CLI transcription). Queue updated (moved WUI-020 to Now).
+ - 2026-01-21T12:19:43Z — WORKER — CODEX_ITERATION=8 — WUI-020 — tests: passed (make test); lint: passed (make lint)
++- 2026-01-21T12:24:16Z — JUDGE — CODEX_ITERATION=8 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
+diff --git a/.agent/queue.md b/.agent/queue.md
+index 30ea8cf77621e7f45ce81a412a66aa7097465063..809a7c5b49498b73bc8e6687f06ee2eb4d6e4921
+--- a/.agent/queue.md
++++ b/.agent/queue.md
+@@ -1,7 +1,6 @@
+ # Queue
+ 
+ ## Now
+-- [ ] WUI-020 — Integrate `wtm` CLI transcription (acceptance: for a job, system runs `wtm` with chosen language and produces at least `.txt` in `data/results/<job_id>/`)
+ 
+ ## Next
+ 
+@@ -13,6 +12,7 @@
+ - [ ] WUI-090 — Live mode skeleton (acceptance: UI has “Live” page stub + technical plan in docs; no implementation yet)
+ 
+ ## Done
++- [x] WUI-020 — Integrate `wtm` CLI transcription (acceptance: for a job, system runs `wtm` with chosen language and produces at least `.txt` in `data/results/<job_id>/`)
+ - [x] WUI-012 — Sequential worker + fake transcriber (acceptance: single worker processes jobs strictly one-at-a-time; tests do not require ML model)
+ - [x] WUI-011 — Persistent job store (SQLite) (acceptance: jobs survive server restart; history page lists prior jobs)
+ - [x] WUI-010 — Upload endpoint + local storage (acceptance: user can upload multiple files; files saved under `data/uploads/` and jobs are created)
+diff --git a/.agent/state.md b/.agent/state.md
+index 4601330913812a1c8375a7683bb74615352e32ff..3363c794e6f601f097f16c3d75bbc1bedb8cb949
+--- a/.agent/state.md
++++ b/.agent/state.md
+@@ -1,3 +1,3 @@
+-last_task_id: WUI-012
++last_task_id: WUI-020
+ last_verdict: PASS
+ consecutive_failures: 0
+
+
+
+thinking
+**Confirming commit and state updates**
+
+The last_judge file is properly included in the commit, reflecting repo status and commit message. Ongoing log writes modify judge error logs post-commit as expected. All agent state and progress files are updated, with pending tasks remaining in the queue, so no DONE marker is created.
+thinking
+**Crafting final summary message**
+
+The final summary will include a PASS verdict, confirmation that tests reran and passed, lint passed by worker though not rerun here, queue updates marking WUI-020 done and next task WUI-021, state and feedback files updated, commit details, repo status with modified logs and untracked data, plus references to judge_feedback.md and progress.md for details—all within 12 concise bullet lines.
+codex
+- Verdict: PASS — WUI-020 acceptance met (wtm CLI transcriber with language + txt output).
+- Tests: `make test` passed (rerun).
+- Lint: not rerun; worker reported `make lint` pass.
+- Queue: moved WUI-020 to Done.
+- Next task: WUI-021 — Results browsing + download.
+- State: updated `.agent/state.md` (last_task_id=WUI-020, failures=0).
+- Feedback: updated `.agent/judge_feedback.md`.
+- Progress: appended `.agent/progress.md` (CODEX_ITERATION=8).
+- Commit: `WUI-020: Integrate wtm CLI transcription`.
+- Repo status: modified `.agent/logs/judge_8.err` (post-commit harness log).
+- Repo status: untracked `data/` (runtime directory).
+- Where to look: `.agent/judge_feedback.md`, `.agent/progress.md`.
+file update:
+diff --git a/.agent/judge_feedback.md b/.agent/judge_feedback.md
+index edeee188669491702e9d3a27dc00c2e229489fb0..8509813cbe0fd782219471d78d50f461e9632e64
+--- a/.agent/judge_feedback.md
++++ b/.agent/judge_feedback.md
+@@ -3,4 +3,4 @@
+ Notes:
+ - `make test` passes (rerun).
+ - `make lint` not rerun; worker reported pass.
+-- Acceptance criteria met for WUI-012.
++- Acceptance criteria met for WUI-020.
+diff --git a/.agent/progress.md b/.agent/progress.md
+index 257d09594aba3628cbdce89f9c710fe1663e2069..1c72e6bd59959806310d020ae2d5428a615d032e
+--- a/.agent/progress.md
++++ b/.agent/progress.md
+@@ -24,3 +24,4 @@
+ - 2026-01-21T12:08:25Z — JUDGE — CODEX_ITERATION=7 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
+ - 2026-01-21T12:13:35Z — PLANNER — CODEX_ITERATION=8 — selected WUI-020 (Integrate `wtm` CLI transcription). Queue updated (moved WUI-020 to Now).
+ - 2026-01-21T12:19:43Z — WORKER — CODEX_ITERATION=8 — WUI-020 — tests: passed (make test); lint: passed (make lint)
++- 2026-01-21T12:24:16Z — JUDGE — CODEX_ITERATION=8 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
+diff --git a/.agent/queue.md b/.agent/queue.md
+index 30ea8cf77621e7f45ce81a412a66aa7097465063..809a7c5b49498b73bc8e6687f06ee2eb4d6e4921
+--- a/.agent/queue.md
++++ b/.agent/queue.md
+@@ -1,7 +1,6 @@
+ # Queue
+ 
+ ## Now
+-- [ ] WUI-020 — Integrate `wtm` CLI transcription (acceptance: for a job, system runs `wtm` with chosen language and produces at least `.txt` in `data/results/<job_id>/`)
+ 
+ ## Next
+ 
+@@ -13,6 +12,7 @@
+ - [ ] WUI-090 — Live mode skeleton (acceptance: UI has “Live” page stub + technical plan in docs; no implementation yet)
+ 
+ ## Done
++- [x] WUI-020 — Integrate `wtm` CLI transcription (acceptance: for a job, system runs `wtm` with chosen language and produces at least `.txt` in `data/results/<job_id>/`)
+ - [x] WUI-012 — Sequential worker + fake transcriber (acceptance: single worker processes jobs strictly one-at-a-time; tests do not require ML model)
+ - [x] WUI-011 — Persistent job store (SQLite) (acceptance: jobs survive server restart; history page lists prior jobs)
+ - [x] WUI-010 — Upload endpoint + local storage (acceptance: user can upload multiple files; files saved under `data/uploads/` and jobs are created)
+diff --git a/.agent/state.md b/.agent/state.md
+index 4601330913812a1c8375a7683bb74615352e32ff..3363c794e6f601f097f16c3d75bbc1bedb8cb949
+--- a/.agent/state.md
++++ b/.agent/state.md
+@@ -1,3 +1,3 @@
+-last_task_id: WUI-012
++last_task_id: WUI-020
+ last_verdict: PASS
+ consecutive_failures: 0
+
+tokens used
+106,406

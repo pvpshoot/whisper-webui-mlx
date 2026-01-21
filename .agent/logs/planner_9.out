@@ -1,0 +1,5 @@
+Selected task: WUI-021 — Results browsing + download.
+
+Updated files: `.agent/queue.md`, `.agent/plan.md`, `.agent/progress.md`.
+
+Worker should now follow `.agent/plan.md`: add per-job result listing + download endpoint in `mlx_ui/app.py`, update `mlx_ui/templates/index.html`, add tests in `tests/test_app.py`, then run `make test` and `make lint`.

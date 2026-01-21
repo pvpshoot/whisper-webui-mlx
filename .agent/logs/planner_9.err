@@ -1,0 +1,1211 @@
+OpenAI Codex v0.87.0 (research preview)
+--------
+workdir: /Users/ivankhokhlov/code/mlx-ui/.
+model: gpt-5.2-codex
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: xhigh
+reasoning summaries: auto
+session id: 019be086-c3ac-7b63-9dea-4e2a10e49adc
+--------
+user
+# PLANNER AGENT (3-phase harness)
+
+You are the PLANNER in a Planner→Worker→Judge pipeline.
+Your job is to keep the project “drivable” for long-running loops:
+- maintain durable state in files
+- define ONE executable task per cycle
+- write a crisp plan for the Worker
+- do NOT implement product/source code (leave that to Worker)
+
+This run is non-interactive (`codex exec`). Do not ask questions; make assumptions and log them.
+
+## Inputs you MUST read
+- `.agent/PROJECT.md` (authoritative)
+- `AGENTS.md` (if present)
+- `docs/spec.md` (if present)
+- `docs/dev.md` (if present)
+- `.agent/queue.md` (if present)
+- `.agent/progress.md` (if present)
+- `.agent/state.md` (if present)
+- `.agent/judge_feedback.md` (if present)
+- `.agent/BLOCKED.md` (if present)
+
+## Files you are allowed to create/modify
+- `.agent/**`
+- `docs/**`
+- `AGENTS.md`
+- `README.md`, `.gitignore`
+- `scripts/**`, `Makefile`, `pyproject.toml`, `requirements*.txt`
+
+Do NOT implement application/source code (e.g. `app/**`, `src/**`) in this PLANNER role.
+
+## Stop conditions
+- If `.agent/STOP` exists: append “STOP seen” to `.agent/progress.md` and exit.
+- If `.agent/DONE` exists: append “DONE seen” to `.agent/progress.md` and exit.
+
+## Required durable files (create if missing)
+Create directories as needed (`.agent/`, `.agent/logs/`, `docs/`).
+
+Ensure these exist (create minimal versions if missing):
+- `AGENTS.md` (repo-specific agent rules: how to run tests, style rules, definition of done)
+- `docs/spec.md` (spec derived from PROJECT.md; include MVP + later phases)
+- `docs/dev.md` (how to setup/run/test locally on macOS M1+; keep short)
+- `docs/tree.md` (curated tree map; can start small)
+- `.agent/queue.md` (task backlog in required format below)
+- `.agent/progress.md` (append-only log)
+- `.agent/state.md` (small key-values: last_task_id, last_verdict, consecutive_failures)
+- `.agent/plan.md` (overwrite each cycle)
+- `.agent/judge_feedback.md` (may exist; do not delete unless Judge says so)
+
+If `.agent/queue.md` is missing, seed it with 10–18 tasks in sensible order:
+- Harness/bootstrap tasks (Makefile, tests, minimal web skeleton)
+- MVP WebUI: uploads → queue → sequential worker → results
+- Integrate `wtm` CLI for real transcription (language selection, formats, robust errors)
+- One-command macOS setup/run script (brew/venv/pip/model download, open browser)
+- Observability/logging
+- Optional Telegram delivery
+- Optional update check at startup (best-effort; must not break offline)
+- Backlog: live mode + chunked transcription
+
+## Critical product constraints (must be reflected in plans/queue)
+- Bind ONLY to localhost (127.0.0.1). No LAN exposure.
+- Strictly sequential queue (no parallel transcriptions).
+- After initial dependency/model download, app must work fully offline.
+- Secrets (Telegram token) must never be printed or exposed in UI logs; always masked.
+- Telegram send must never break the pipeline; failures are logged only.
+- Tests should not require running the real ML model by default; mock `wtm` execution.
+
+## Queue format (MUST match exactly)
+`.agent/queue.md` must be:
+
+# Queue
+
+## Now
+- [ ] <task id> — <short title> (acceptance: <one line>)
+
+## Next
+- [ ] <task id> — <short title> (acceptance: <one line>)
+
+## Later
+- [ ] <task id> — <short title> (acceptance: <one line>)
+
+## Done
+- [x] <task id> — <short title>
+
+Rules:
+- The Worker does NOT mark tasks done; the Judge does.
+- You select the first unchecked item in Now (else Next, else Later).
+- If the selected task is too large, split it into smaller tasks and pick the first.
+
+## Planning logic (per cycle)
+1) Read `.agent/state.md` and `.agent/judge_feedback.md`.
+   - If the last verdict indicates repeated failure (>=3): split the task or create a narrower “fix” task at the top of Now.
+2) Choose exactly ONE task for the Worker.
+3) Write `.agent/plan.md` with:
+   - Task id + title
+   - Acceptance criteria (copy from queue)
+   - Assumptions (only if needed)
+   - Implementation steps (3–10 bullets)
+   - Files likely to touch
+   - Verification steps: run TEST_CMD (and LINT_CMD if set)
+4) Append to `.agent/progress.md` a PLANNER entry:
+   - timestamp
+   - CODEX_ITERATION (if available)
+   - selected task
+   - any queue changes (splits, reprioritization)
+
+## Output
+Print a short summary:
+- selected task id/title
+- what files you updated (queue/spec/plan/etc.)
+- what the Worker should do next
+
+mcp startup: no servers
+
+thinking
+**Preparing to list specified files**
+exec
+/bin/zsh -lc ls in /Users/ivankhokhlov/code/mlx-ui/. succeeded in 65ms:
+AGENTS.md
+Makefile
+README.md
+data
+docs
+mlx_ui
+poetry.lock
+pyproject.toml
+scripts
+tests
+
+thinking
+**Listing agent files**
+
+I'm checking the repository for existing AGENTS files and listing all `.agent` files to understand the current agent setups.
+exec
+/bin/zsh -lc 'ls -a' in /Users/ivankhokhlov/code/mlx-ui/. succeeded in 67ms:
+.
+..
+.DS_Store
+.agent
+.git
+.gitignore
+.pytest_cache
+.python-version
+.ruff_cache
+.venv
+AGENTS.md
+Makefile
+README.md
+data
+docs
+mlx_ui
+poetry.lock
+pyproject.toml
+scripts
+tests
+
+thinking
+**Opening documentation for context**
+exec
+/bin/zsh -lc 'cat AGENTS.md' in /Users/ivankhokhlov/code/mlx-ui/. succeeded in 87ms:
+# AGENTS.md
+
+This repo is developed using an autonomous loop (Planner → Worker → Judge) driven by `codex exec`.
+Because each run starts with limited context, **durable state MUST be stored in `.agent/`**.
+
+## Source of truth
+- `.agent/PROJECT.md` — high-level constraints and commands
+- `docs/spec.md` — product requirements
+- `.agent/queue.md` — backlog (Judge marks tasks done)
+
+## How to run
+- Tests: `make test`
+- Lint: `make lint`
+- Format: `make fmt`
+- Run server: `make run`
+
+If Makefile does not exist yet, create it during bootstrap.
+
+## Safety / security rules
+- Never touch anything outside the repo root.
+
+thinking
+**Listing .agent directory contents**
+
+I'm reading the .agent directory and the PROJECT.md file there to gather relevant project details for the task.
+exec
+/bin/zsh -lc 'ls .agent' in /Users/ivankhokhlov/code/mlx-ui/. succeeded in 90ms:
+BLOCKED.md
+PROJECT.md
+judge.md
+judge_feedback.md
+last_judge.txt
+last_planner.txt
+last_worker.txt
+logs
+plan.md
+planner.md
+progress.md
+queue.md
+state.md
+worker.md
+worker_report.md
+
+thinking
+**Reading project documentation files**
+exec
+/bin/zsh -lc 'cat .agent/PROJECT.md' in /Users/ivankhokhlov/code/mlx-ui/. succeeded in 79ms:
+# PROJECT (single source of truth for the harness)
+
+PROJECT_NAME: "whisper-webui-mlx"
+REPO_KIND: "new repo"
+
+## Brief (1–2 paragraphs)
+Build a **local macOS app for Apple Silicon (M1+)** that exposes a **Web UI on localhost** to manage **offline transcription** of audio/video files using the engine from `whisper-turbo-mlx` via its CLI `wtm` (MLX). https://github.com/JosefAlbers/whisper-turbo-mlx
+
+Turn the current console workflow (e.g. `wtm ... --any_lang=True`) into a tool that is easy to deploy on another M1+ Mac with **one command**, supports **batch uploads**, a **strictly sequential** processing queue (no parallelism), **job history + downloads**, optional **Telegram delivery of TXT results**, and (in the final phase) **live recording + chunked transcription**.
+
+## Primary stack
+Python 3.11+
+- Backend/Web: FastAPI + Uvicorn
+- Templates/UI: Jinja2 + minimal vanilla JS (no external CDNs; must work offline)
+- Storage: SQLite (jobs metadata) + local filesystem (uploads/results/logs)
+- Worker: a single sequential worker consuming a persistent queue
+- Transcription: subprocess call to `wtm` with explicit language selection
+
+## Commands (choose defaults if unknown)
+TEST_CMD: "make test"
+
+thinking
+**Identifying missing docs**
+exec
+/bin/zsh -lc 'cat docs/spec.md' in /Users/ivankhokhlov/code/mlx-ui/. succeeded in 68ms:
+# Spec — whisper-webui-mlx
+
+## Goal
+Create a **local-only** tool for **macOS Apple Silicon (M1+)** that provides a **Web UI on localhost** to manage **local transcription** of audio/video files using the engine from `whisper-turbo-mlx` via its CLI `wtm` (MLX).
+
+The tool must be easy to deploy to another M1+ Mac (one command), and after the initial setup + model download it must work **fully offline**.
+
+## MVP: Batch file transcription via Web UI
+### UX
+- User opens Web UI (localhost).
+- User uploads **one or multiple files** (audio or video).
+- User selects the **language manually** (no auto-detect).
+- Files are placed into a **queue** and processed **strictly sequentially** (no parallel jobs).
+- UI has:
+  - Queue view: current job + pending jobs
+  - History view: completed jobs + access to results
+
+### Processing rules
+- One worker processes one job at a time (sequential).
+- Keep the ML model “warm” behavior in mind: avoid parallelism and avoid reinitialization churn.
+
+thinking
+**Noting missing docs file**
+exec
+/bin/zsh -lc 'cat docs/dev.md' in /Users/ivankhokhlov/code/mlx-ui/. succeeded in 60ms:
+# Developer guide
+
+## Requirements (target)
+- macOS Apple Silicon (M1+)
+- Python 3.11+
+- Homebrew (for system deps like ffmpeg)
+
+## Quick start (eventual)
+```bash
+./scripts/setup_and_run.sh
+```
+
+## Manual dev loop
+```bash
+poetry install --with dev
+
+make test
+make run
+```
+
+
+thinking
+**Identifying missing documentation**
+
+The documentation file docs/tree.md is needed and currently missing.
+exec
+/bin/zsh -lc 'cat docs/tree.md' in /Users/ivankhokhlov/code/mlx-ui/. succeeded in 65ms:
+# Project tree (curated)
+
+This file is a human-maintained map of the repo. Update when structure changes.
+
+## Current (bootstrap)
+- `.agent/` — durable loop state + prompts
+- `data/` — runtime uploads/results/logs/jobs.db (created on demand)
+- `docs/` — spec + dev notes + this tree map
+- `mlx_ui/` — FastAPI app package (`app.py`, `db.py`, `worker.py`, `transcriber.py`)
+- `mlx_ui/templates/` — Jinja2 templates
+- `scripts/` — loop scripts + setup/run scripts (to be implemented)
+- `tests/` — pytest suite (`test_app.py`, `test_transcriber.py`, `test_worker.py`)
+- `Makefile` — dev commands
+- `pyproject.toml` — dependencies and tooling
+- `README.md` — repo overview
+
+thinking
+**Noting missing documentation files**
+exec
+/bin/zsh -lc 'cat .agent/queue.md' in /Users/ivankhokhlov/code/mlx-ui/. succeeded in 64ms:
+# Queue
+
+## Now
+
+## Next
+
+## Later
+- [ ] WUI-021 — Results browsing + download (acceptance: history page shows per-job links to view/download TXT and other generated formats)
+- [ ] WUI-030 — One-command setup & run on M1+ macOS (acceptance: `./scripts/setup_and_run.sh` installs deps, downloads models, starts server, and opens browser)
+- [ ] WUI-040 — Telegram delivery (acceptance: when env vars are set, send TXT + message; failures do not break pipeline; secrets masked)
+- [ ] WUI-050 — Update check at startup (acceptance: if online, checks for updates with timeout; if offline, no errors and app works)
+- [ ] WUI-090 — Live mode skeleton (acceptance: UI has “Live” page stub + technical plan in docs; no implementation yet)
+
+## Done
+- [x] WUI-020 — Integrate `wtm` CLI transcription (acceptance: for a job, system runs `wtm` with chosen language and produces at least `.txt` in `data/results/<job_id>/`)
+- [x] WUI-012 — Sequential worker + fake transcriber (acceptance: single worker processes jobs strictly one-at-a-time; tests do not require ML model)
+- [x] WUI-011 — Persistent job store (SQLite) (acceptance: jobs survive server restart; history page lists prior jobs)
+- [x] WUI-010 — Upload endpoint + local storage (acceptance: user can upload multiple files; files saved under `data/uploads/` and jobs are created)
+- [x] WUI-002 — Minimal WebUI shell (acceptance: localhost page renders with tabs: Queue + History, using server-side templates)
+- [x] WUI-001A — Fix pytest availability for `make test` (acceptance: `make test` succeeds in a clean env by ensuring pytest is installed or Makefile uses Poetry/venv)
+exec
+/bin/zsh -lc 'cat .agent/progress.md' in /Users/ivankhokhlov/code/mlx-ui/. succeeded in 89ms:
+# Progress Log (append-only)
+
+- 2026-01-21T09:49:08 — INIT — Harness files created. Next: run the 3-phase loop.
+- 2026-01-21T10:33:08Z — PLANNER — CODEX_ITERATION=1 — selected WUI-001 (Bootstrap repo skeleton). Queue unchanged.
+- 2026-01-21T10:37:23Z — WORKER — CODEX_ITERATION=1 — WUI-001 — tests: failed (pytest missing); lint: not run
+- 2026-01-21T10:39:53Z — JUDGE — CODEX_ITERATION=1 — NEEDS_WORK — make test failed (pytest missing in venv); tests: failed (make test)
+- 2026-01-21T10:42:24Z — PLANNER — CODEX_ITERATION=2 — selected WUI-001A (Fix pytest availability for `make test`). Queue updated (format fix for WUI-001A).
+- 2026-01-21T10:49:11Z — WORKER — CODEX_ITERATION=2 — WUI-001A — tests: passed (make test); lint: passed (make lint)
+- 2026-01-21T10:52:47Z — JUDGE — CODEX_ITERATION=2 — PASS — acceptance met; tests: passed (make test); lint: passed (make lint)
+- 2026-01-21T10:56:28Z — PLANNER — CODEX_ITERATION=3 — selected WUI-001 (Bootstrap repo skeleton). Queue unchanged.
+- 2026-01-21T10:58:25Z — WORKER — CODEX_ITERATION=3 — WUI-001 — tests: passed (make test); lint: passed (make lint)
+- 2026-01-21T11:01:51Z — JUDGE — CODEX_ITERATION=3 — PASS — acceptance met; tests: passed (make test); lint: passed (make lint)
+- 2026-01-21T11:05:17Z — PLANNER — CODEX_ITERATION=4 — selected WUI-002 (Minimal WebUI shell). Queue unchanged.
+- 2026-01-21T11:11:48Z — WORKER — CODEX_ITERATION=4 — WUI-002 — tests: passed (make test); lint: passed (make lint)
+- 2026-01-21T11:16:13Z — JUDGE — CODEX_ITERATION=4 — PASS — acceptance met; tests: passed (make test); lint: passed (make lint)
+- 2026-01-21T11:23:27Z — PLANNER — CODEX_ITERATION=5 — selected WUI-010 (Upload endpoint + local storage). Queue updated (moved WUI-010 to Now).
+- 2026-01-21T11:33:16Z — WORKER — CODEX_ITERATION=5 — WUI-010 — tests: passed (make test); lint: passed (make lint)
+- 2026-01-21T11:37:21Z — JUDGE — CODEX_ITERATION=5 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
+- 2026-01-21T11:41:40Z — PLANNER — CODEX_ITERATION=6 — selected WUI-011 (Persistent job store (SQLite)). Queue updated (moved WUI-011 to Now).
+- 2026-01-21T11:48:06Z — WORKER — CODEX_ITERATION=6 — WUI-011 — tests: passed (make test); lint: passed (make lint)
+exec
+/bin/zsh -lc 'cat .agent/state.md' in /Users/ivankhokhlov/code/mlx-ui/. succeeded in 91ms:
+last_task_id: WUI-020
+last_verdict: PASS
+consecutive_failures: 0
+exec
+/bin/zsh -lc 'cat .agent/judge_feedback.md' in /Users/ivankhokhlov/code/mlx-ui/. succeeded in 67ms:
+PASS
+
+Notes:
+- `make test` passes (rerun).
+- `make lint` not rerun; worker reported pass.
+- Acceptance criteria met for WUI-020.
+exec
+/bin/zsh -lc 'cat .agent/BLOCKED.md' in /Users/ivankhokhlov/code/mlx-ui/. succeeded in 97ms:
+# BLOCKED (resolved)
+
+- Resolved: WUI-001 no longer blocked; tests and lint now pass.
+- Previous issue: `make test` failed because pytest was missing in the environment.
+- Previous error: `/Users/ivankhokhlov/code/mlx-ui/.venv/bin/python: No module named pytest`
+
+thinking
+**Noting additional documentation need**
+exec
+/bin/zsh -lc 'cat .agent/plan.md' in /Users/ivankhokhlov/code/mlx-ui/. succeeded in 75ms:
+# Plan
+
+Task: WUI-020 — Integrate `wtm` CLI transcription
+
+Acceptance: for a job, system runs `wtm` with chosen language and produces at least `.txt` in `data/results/<job_id>/`
+
+Assumptions:
+- `wtm` is installed and available on PATH (or a configurable path), and the model has been downloaded.
+- Tests should not invoke the real ML model; subprocess calls will be mocked.
+
+Implementation steps:
+- Inspect the current transcriber interface and worker flow to locate where to swap the fake transcriber for a CLI-backed implementation.
+- Implement a `wtm`-backed transcriber that builds the CLI command with the selected language and output directory, captures errors, and writes results under `data/results/<job_id>/`.
+- Ensure the worker uses the new transcriber path and records failures cleanly without breaking the queue.
+- Add configuration hooks if needed (e.g., optional `WTM_PATH`) and keep logs readable while avoiding secret exposure.
+- Update tests to mock subprocess execution, create a fake `.txt` result, and assert job status/result paths without running the model.
+
+Files likely to touch:
+- `mlx_ui/transcriber.py`
+- `mlx_ui/worker.py`
+
+thinking
+**Checking for STOP or DONE flags**
+
+I noticed the agent's feedback may include STOP or DONE signals, so I need to implement a check for these markers in the feedback to handle task termination properly.
+exec
+/bin/zsh -lc "ls .agent | rg -n 'STOP|DONE'" in /Users/ivankhokhlov/code/mlx-ui/. exited 1 in 98ms:
+
+
+
+thinking
+**Updating task queue to move next item to active**
+
+I'm moving the first task from Later to Now since the queue has no active items, ensuring progress can continue smoothly by updating the plan and progress metadata accordingly.
+thinking
+**Preparing plan update and queue patch**
+
+I'm finalizing the .agent/plan.md content for the selected task including acceptance criteria, implementation steps, and likely touched files based on repository structure. I'll also update .agent/queue.md to move the selected task to Now, optionally adjusting Next and Later lists while appending progress entries with timestamps.
+exec
+/bin/zsh -lc 'rg --files mlx_ui' in /Users/ivankhokhlov/code/mlx-ui/. succeeded in 99ms:
+mlx_ui/templates/index.html
+mlx_ui/app.py
+mlx_ui/__init__.py
+mlx_ui/transcriber.py
+mlx_ui/db.py
+mlx_ui/worker.py
+
+thinking
+**Outlining history page implementation plan**
+
+I'm noting key files for review (`app.py`, `index.html`, `db.py`, `test_app.py`), and that the history page should list per-job result links from `data/results/<job_id>`. The plan will include adding endpoints and route for downloading results, inspecting or extending the data model to store result paths, and verifying with tests and linting. Also, I'll log progress with timestamps and optionally include CODEX_ITERATION if available.
+exec
+/bin/zsh -lc 'echo $CODEX_ITERATION' in /Users/ivankhokhlov/code/mlx-ui/. succeeded in 57ms:
+9
+
+
+thinking
+**Deciding file update method**
+
+I’m choosing to use apply_patch for single-file edits like appending progress and updating the plan, but may use direct overwrite for replacing full files when simpler.
+thinking
+**Planning precise file patches**
+
+I'm preparing detailed apply_patch updates to move task lines in the queue, fully rewrite the plan with implementation steps, and append a timestamped progress entry using the current UTC date.
+exec
+/bin/zsh -lc 'date -u +%Y-%m-%dT%H:%M:%SZ' in /Users/ivankhokhlov/code/mlx-ui/. succeeded in 93ms:
+2026-01-21T12:29:53Z
+
+thinking
+**Applying patch with timestamp**
+file update
+M /Users/ivankhokhlov/code/mlx-ui/./.agent/queue.md
+@@ -3,2 +3,3 @@
+ ## Now
++- [ ] WUI-021 — Results browsing + download (acceptance: history page shows per-job links to view/download TXT and other generated formats)
+ 
+@@ -7,3 +8,2 @@
+ ## Later
+-- [ ] WUI-021 — Results browsing + download (acceptance: history page shows per-job links to view/download TXT and other generated formats)
+ - [ ] WUI-030 — One-command setup & run on M1+ macOS (acceptance: `./scripts/setup_and_run.sh` installs deps, downloads models, starts server, and opens browser)
+apply_patch(auto_approved=true) exited 0 in 15ms:
+Success. Updated the following files:
+M .agent/queue.md
+file update:
+diff --git a/.agent/queue.md b/.agent/queue.md
+index 809a7c5b49498b73bc8e6687f06ee2eb4d6e4921..195a75ee033e8d7132e8d2fd35df99cc393e06db
+--- a/.agent/queue.md
++++ b/.agent/queue.md
+@@ -1,11 +1,11 @@
+ # Queue
+ 
+ ## Now
++- [ ] WUI-021 — Results browsing + download (acceptance: history page shows per-job links to view/download TXT and other generated formats)
+ 
+ ## Next
+ 
+ ## Later
+-- [ ] WUI-021 — Results browsing + download (acceptance: history page shows per-job links to view/download TXT and other generated formats)
+ - [ ] WUI-030 — One-command setup & run on M1+ macOS (acceptance: `./scripts/setup_and_run.sh` installs deps, downloads models, starts server, and opens browser)
+ - [ ] WUI-040 — Telegram delivery (acceptance: when env vars are set, send TXT + message; failures do not break pipeline; secrets masked)
+ - [ ] WUI-050 — Update check at startup (acceptance: if online, checks for updates with timeout; if offline, no errors and app works)
+
+file update:
+diff --git a/.agent/queue.md b/.agent/queue.md
+index 809a7c5b49498b73bc8e6687f06ee2eb4d6e4921..195a75ee033e8d7132e8d2fd35df99cc393e06db
+--- a/.agent/queue.md
++++ b/.agent/queue.md
+@@ -1,11 +1,11 @@
+ # Queue
+ 
+ ## Now
++- [ ] WUI-021 — Results browsing + download (acceptance: history page shows per-job links to view/download TXT and other generated formats)
+ 
+ ## Next
+ 
+ ## Later
+-- [ ] WUI-021 — Results browsing + download (acceptance: history page shows per-job links to view/download TXT and other generated formats)
+ - [ ] WUI-030 — One-command setup & run on M1+ macOS (acceptance: `./scripts/setup_and_run.sh` installs deps, downloads models, starts server, and opens browser)
+ - [ ] WUI-040 — Telegram delivery (acceptance: when env vars are set, send TXT + message; failures do not break pipeline; secrets masked)
+ - [ ] WUI-050 — Update check at startup (acceptance: if online, checks for updates with timeout; if offline, no errors and app works)
+
+
+
+thinking
+**Updating plan with detailed implementation steps**
+
+The plan now precisely outlines scanning result files by job ID, securing the download endpoint against path traversal, enhancing the history page UI with per-job result links, and expanding tests with fake files to verify UI rendering and downloads.
+thinking
+**Planning full file content replacement with patch**
+
+I'm preparing to replace the entire plan file content using an apply_patch update that overwrites from top to bottom for reliability, ensuring clean and complete update without adding or deleting the file separately.
+exec
+/bin/zsh -lc 'cat .agent/plan.md' in /Users/ivankhokhlov/code/mlx-ui/. succeeded in 78ms:
+# Plan
+
+Task: WUI-020 — Integrate `wtm` CLI transcription
+
+Acceptance: for a job, system runs `wtm` with chosen language and produces at least `.txt` in `data/results/<job_id>/`
+
+Assumptions:
+- `wtm` is installed and available on PATH (or a configurable path), and the model has been downloaded.
+- Tests should not invoke the real ML model; subprocess calls will be mocked.
+
+Implementation steps:
+- Inspect the current transcriber interface and worker flow to locate where to swap the fake transcriber for a CLI-backed implementation.
+- Implement a `wtm`-backed transcriber that builds the CLI command with the selected language and output directory, captures errors, and writes results under `data/results/<job_id>/`.
+- Ensure the worker uses the new transcriber path and records failures cleanly without breaking the queue.
+- Add configuration hooks if needed (e.g., optional `WTM_PATH`) and keep logs readable while avoiding secret exposure.
+- Update tests to mock subprocess execution, create a fake `.txt` result, and assert job status/result paths without running the model.
+
+Files likely to touch:
+- `mlx_ui/transcriber.py`
+- `mlx_ui/worker.py`
+file update:
+diff --git a/.agent/queue.md b/.agent/queue.md
+index 809a7c5b49498b73bc8e6687f06ee2eb4d6e4921..195a75ee033e8d7132e8d2fd35df99cc393e06db
+--- a/.agent/queue.md
++++ b/.agent/queue.md
+@@ -1,11 +1,11 @@
+ # Queue
+ 
+ ## Now
++- [ ] WUI-021 — Results browsing + download (acceptance: history page shows per-job links to view/download TXT and other generated formats)
+ 
+ ## Next
+ 
+ ## Later
+-- [ ] WUI-021 — Results browsing + download (acceptance: history page shows per-job links to view/download TXT and other generated formats)
+ - [ ] WUI-030 — One-command setup & run on M1+ macOS (acceptance: `./scripts/setup_and_run.sh` installs deps, downloads models, starts server, and opens browser)
+ - [ ] WUI-040 — Telegram delivery (acceptance: when env vars are set, send TXT + message; failures do not break pipeline; secrets masked)
+ - [ ] WUI-050 — Update check at startup (acceptance: if online, checks for updates with timeout; if offline, no errors and app works)
+
+
+thinking
+**Applying content replacement patch**
+file update
+M /Users/ivankhokhlov/code/mlx-ui/./.agent/plan.md
+@@ -2,22 +2,20 @@
+ 
+-Task: WUI-020 — Integrate `wtm` CLI transcription
++Task: WUI-021 — Results browsing + download
+ 
+-Acceptance: for a job, system runs `wtm` with chosen language and produces at least `.txt` in `data/results/<job_id>/`
++Acceptance: history page shows per-job links to view/download TXT and other generated formats
+ 
+ Assumptions:
+-- `wtm` is installed and available on PATH (or a configurable path), and the model has been downloaded.
+-- Tests should not invoke the real ML model; subprocess calls will be mocked.
++- Results live under `data/results/<job_id>/` and are safe to expose via file download routes.
++- Job history already exists and includes job IDs that map to results directories.
+ 
+ Implementation steps:
+-- Inspect the current transcriber interface and worker flow to locate where to swap the fake transcriber for a CLI-backed implementation.
+-- Implement a `wtm`-backed transcriber that builds the CLI command with the selected language and output directory, captures errors, and writes results under `data/results/<job_id>/`.
+-- Ensure the worker uses the new transcriber path and records failures cleanly without breaking the queue.
+-- Add configuration hooks if needed (e.g., optional `WTM_PATH`) and keep logs readable while avoiding secret exposure.
+-- Update tests to mock subprocess execution, create a fake `.txt` result, and assert job status/result paths without running the model.
++- Review current history rendering in `mlx_ui/templates/index.html` and job metadata access in `mlx_ui/app.py` to confirm what fields are available per job.
++- Add a helper to list result files for a job by scanning `data/results/<job_id>/`, filtering non-files, and sorting deterministically.
++- Add a download/view endpoint (e.g., `/results/{job_id}/{filename}`) using `FileResponse`, with path traversal protection and 404 for missing files.
++- Update the History section in the template to show per-job lists of result links (TXT emphasized) and a “no results yet” fallback.
++- Extend tests to create fake result files and assert history renders links and download endpoints return file content.
+ 
+ Files likely to touch:
+-- `mlx_ui/transcriber.py`
+-- `mlx_ui/worker.py`
+ - `mlx_ui/app.py`
+-- `tests/test_worker.py`
++- `mlx_ui/templates/index.html`
+ - `tests/test_app.py`
+apply_patch(auto_approved=true) exited 0 in 24ms:
+Success. Updated the following files:
+M .agent/plan.md
+file update:
+diff --git a/.agent/plan.md b/.agent/plan.md
+index 556276083327ef24defea479df685a7e008ca12e..125e7701e7e72155f6e3df01cc816389f205edf4
+--- a/.agent/plan.md
++++ b/.agent/plan.md
+@@ -1,25 +1,23 @@
+ # Plan
+ 
+-Task: WUI-020 — Integrate `wtm` CLI transcription
++Task: WUI-021 — Results browsing + download
+ 
+-Acceptance: for a job, system runs `wtm` with chosen language and produces at least `.txt` in `data/results/<job_id>/`
++Acceptance: history page shows per-job links to view/download TXT and other generated formats
+ 
+ Assumptions:
+-- `wtm` is installed and available on PATH (or a configurable path), and the model has been downloaded.
+-- Tests should not invoke the real ML model; subprocess calls will be mocked.
++- Results live under `data/results/<job_id>/` and are safe to expose via file download routes.
++- Job history already exists and includes job IDs that map to results directories.
+ 
+ Implementation steps:
+-- Inspect the current transcriber interface and worker flow to locate where to swap the fake transcriber for a CLI-backed implementation.
+-- Implement a `wtm`-backed transcriber that builds the CLI command with the selected language and output directory, captures errors, and writes results under `data/results/<job_id>/`.
+-- Ensure the worker uses the new transcriber path and records failures cleanly without breaking the queue.
+-- Add configuration hooks if needed (e.g., optional `WTM_PATH`) and keep logs readable while avoiding secret exposure.
+-- Update tests to mock subprocess execution, create a fake `.txt` result, and assert job status/result paths without running the model.
++- Review current history rendering in `mlx_ui/templates/index.html` and job metadata access in `mlx_ui/app.py` to confirm what fields are available per job.
++- Add a helper to list result files for a job by scanning `data/results/<job_id>/`, filtering non-files, and sorting deterministically.
++- Add a download/view endpoint (e.g., `/results/{job_id}/{filename}`) using `FileResponse`, with path traversal protection and 404 for missing files.
++- Update the History section in the template to show per-job lists of result links (TXT emphasized) and a “no results yet” fallback.
++- Extend tests to create fake result files and assert history renders links and download endpoints return file content.
+ 
+ Files likely to touch:
+-- `mlx_ui/transcriber.py`
+-- `mlx_ui/worker.py`
+ - `mlx_ui/app.py`
+-- `tests/test_worker.py`
++- `mlx_ui/templates/index.html`
+ - `tests/test_app.py`
+ 
+ Verification steps:
+diff --git a/.agent/queue.md b/.agent/queue.md
+index 809a7c5b49498b73bc8e6687f06ee2eb4d6e4921..195a75ee033e8d7132e8d2fd35df99cc393e06db
+--- a/.agent/queue.md
++++ b/.agent/queue.md
+@@ -1,11 +1,11 @@
+ # Queue
+ 
+ ## Now
++- [ ] WUI-021 — Results browsing + download (acceptance: history page shows per-job links to view/download TXT and other generated formats)
+ 
+ ## Next
+ 
+ ## Later
+-- [ ] WUI-021 — Results browsing + download (acceptance: history page shows per-job links to view/download TXT and other generated formats)
+ - [ ] WUI-030 — One-command setup & run on M1+ macOS (acceptance: `./scripts/setup_and_run.sh` installs deps, downloads models, starts server, and opens browser)
+ - [ ] WUI-040 — Telegram delivery (acceptance: when env vars are set, send TXT + message; failures do not break pipeline; secrets masked)
+ - [ ] WUI-050 — Update check at startup (acceptance: if online, checks for updates with timeout; if offline, no errors and app works)
+
+file update:
+diff --git a/.agent/plan.md b/.agent/plan.md
+index 556276083327ef24defea479df685a7e008ca12e..125e7701e7e72155f6e3df01cc816389f205edf4
+--- a/.agent/plan.md
++++ b/.agent/plan.md
+@@ -1,25 +1,23 @@
+ # Plan
+ 
+-Task: WUI-020 — Integrate `wtm` CLI transcription
++Task: WUI-021 — Results browsing + download
+ 
+-Acceptance: for a job, system runs `wtm` with chosen language and produces at least `.txt` in `data/results/<job_id>/`
++Acceptance: history page shows per-job links to view/download TXT and other generated formats
+ 
+ Assumptions:
+-- `wtm` is installed and available on PATH (or a configurable path), and the model has been downloaded.
+-- Tests should not invoke the real ML model; subprocess calls will be mocked.
++- Results live under `data/results/<job_id>/` and are safe to expose via file download routes.
++- Job history already exists and includes job IDs that map to results directories.
+ 
+ Implementation steps:
+-- Inspect the current transcriber interface and worker flow to locate where to swap the fake transcriber for a CLI-backed implementation.
+-- Implement a `wtm`-backed transcriber that builds the CLI command with the selected language and output directory, captures errors, and writes results under `data/results/<job_id>/`.
+-- Ensure the worker uses the new transcriber path and records failures cleanly without breaking the queue.
+-- Add configuration hooks if needed (e.g., optional `WTM_PATH`) and keep logs readable while avoiding secret exposure.
+-- Update tests to mock subprocess execution, create a fake `.txt` result, and assert job status/result paths without running the model.
++- Review current history rendering in `mlx_ui/templates/index.html` and job metadata access in `mlx_ui/app.py` to confirm what fields are available per job.
++- Add a helper to list result files for a job by scanning `data/results/<job_id>/`, filtering non-files, and sorting deterministically.
++- Add a download/view endpoint (e.g., `/results/{job_id}/{filename}`) using `FileResponse`, with path traversal protection and 404 for missing files.
++- Update the History section in the template to show per-job lists of result links (TXT emphasized) and a “no results yet” fallback.
++- Extend tests to create fake result files and assert history renders links and download endpoints return file content.
+ 
+ Files likely to touch:
+-- `mlx_ui/transcriber.py`
+-- `mlx_ui/worker.py`
+ - `mlx_ui/app.py`
+-- `tests/test_worker.py`
++- `mlx_ui/templates/index.html`
+ - `tests/test_app.py`
+ 
+ Verification steps:
+diff --git a/.agent/queue.md b/.agent/queue.md
+index 809a7c5b49498b73bc8e6687f06ee2eb4d6e4921..195a75ee033e8d7132e8d2fd35df99cc393e06db
+--- a/.agent/queue.md
++++ b/.agent/queue.md
+@@ -1,11 +1,11 @@
+ # Queue
+ 
+ ## Now
++- [ ] WUI-021 — Results browsing + download (acceptance: history page shows per-job links to view/download TXT and other generated formats)
+ 
+ ## Next
+ 
+ ## Later
+-- [ ] WUI-021 — Results browsing + download (acceptance: history page shows per-job links to view/download TXT and other generated formats)
+ - [ ] WUI-030 — One-command setup & run on M1+ macOS (acceptance: `./scripts/setup_and_run.sh` installs deps, downloads models, starts server, and opens browser)
+ - [ ] WUI-040 — Telegram delivery (acceptance: when env vars are set, send TXT + message; failures do not break pipeline; secrets masked)
+ - [ ] WUI-050 — Update check at startup (acceptance: if online, checks for updates with timeout; if offline, no errors and app works)
+
+
+thinking
+**Appending timestamped line to progress log**
+exec
+/bin/zsh -lc 'tail -n 5 .agent/progress.md' in /Users/ivankhokhlov/code/mlx-ui/. succeeded in 62ms:
+- 2026-01-21T12:03:50Z — WORKER — CODEX_ITERATION=7 — WUI-012 — tests: passed (make test); lint: passed (make lint)
+- 2026-01-21T12:08:25Z — JUDGE — CODEX_ITERATION=7 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
+- 2026-01-21T12:13:35Z — PLANNER — CODEX_ITERATION=8 — selected WUI-020 (Integrate `wtm` CLI transcription). Queue updated (moved WUI-020 to Now).
+- 2026-01-21T12:19:43Z — WORKER — CODEX_ITERATION=8 — WUI-020 — tests: passed (make test); lint: passed (make lint)
+- 2026-01-21T12:24:16Z — JUDGE — CODEX_ITERATION=8 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
+file update:
+diff --git a/.agent/plan.md b/.agent/plan.md
+index 556276083327ef24defea479df685a7e008ca12e..125e7701e7e72155f6e3df01cc816389f205edf4
+--- a/.agent/plan.md
++++ b/.agent/plan.md
+@@ -1,25 +1,23 @@
+ # Plan
+ 
+-Task: WUI-020 — Integrate `wtm` CLI transcription
++Task: WUI-021 — Results browsing + download
+ 
+-Acceptance: for a job, system runs `wtm` with chosen language and produces at least `.txt` in `data/results/<job_id>/`
++Acceptance: history page shows per-job links to view/download TXT and other generated formats
+ 
+ Assumptions:
+-- `wtm` is installed and available on PATH (or a configurable path), and the model has been downloaded.
+-- Tests should not invoke the real ML model; subprocess calls will be mocked.
++- Results live under `data/results/<job_id>/` and are safe to expose via file download routes.
++- Job history already exists and includes job IDs that map to results directories.
+ 
+ Implementation steps:
+-- Inspect the current transcriber interface and worker flow to locate where to swap the fake transcriber for a CLI-backed implementation.
+-- Implement a `wtm`-backed transcriber that builds the CLI command with the selected language and output directory, captures errors, and writes results under `data/results/<job_id>/`.
+-- Ensure the worker uses the new transcriber path and records failures cleanly without breaking the queue.
+-- Add configuration hooks if needed (e.g., optional `WTM_PATH`) and keep logs readable while avoiding secret exposure.
+-- Update tests to mock subprocess execution, create a fake `.txt` result, and assert job status/result paths without running the model.
++- Review current history rendering in `mlx_ui/templates/index.html` and job metadata access in `mlx_ui/app.py` to confirm what fields are available per job.
++- Add a helper to list result files for a job by scanning `data/results/<job_id>/`, filtering non-files, and sorting deterministically.
++- Add a download/view endpoint (e.g., `/results/{job_id}/{filename}`) using `FileResponse`, with path traversal protection and 404 for missing files.
++- Update the History section in the template to show per-job lists of result links (TXT emphasized) and a “no results yet” fallback.
++- Extend tests to create fake result files and assert history renders links and download endpoints return file content.
+ 
+ Files likely to touch:
+-- `mlx_ui/transcriber.py`
+-- `mlx_ui/worker.py`
+ - `mlx_ui/app.py`
+-- `tests/test_worker.py`
++- `mlx_ui/templates/index.html`
+ - `tests/test_app.py`
+ 
+ Verification steps:
+diff --git a/.agent/queue.md b/.agent/queue.md
+index 809a7c5b49498b73bc8e6687f06ee2eb4d6e4921..195a75ee033e8d7132e8d2fd35df99cc393e06db
+--- a/.agent/queue.md
++++ b/.agent/queue.md
+@@ -1,11 +1,11 @@
+ # Queue
+ 
+ ## Now
++- [ ] WUI-021 — Results browsing + download (acceptance: history page shows per-job links to view/download TXT and other generated formats)
+ 
+ ## Next
+ 
+ ## Later
+-- [ ] WUI-021 — Results browsing + download (acceptance: history page shows per-job links to view/download TXT and other generated formats)
+ - [ ] WUI-030 — One-command setup & run on M1+ macOS (acceptance: `./scripts/setup_and_run.sh` installs deps, downloads models, starts server, and opens browser)
+ - [ ] WUI-040 — Telegram delivery (acceptance: when env vars are set, send TXT + message; failures do not break pipeline; secrets masked)
+ - [ ] WUI-050 — Update check at startup (acceptance: if online, checks for updates with timeout; if offline, no errors and app works)
+
+
+thinking
+**Appending new line with patch**
+file update
+M /Users/ivankhokhlov/code/mlx-ui/./.agent/progress.md
+@@ -27 +27,2 @@
+ - 2026-01-21T12:24:16Z — JUDGE — CODEX_ITERATION=8 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
++- 2026-01-21T12:29:53Z — PLANNER — CODEX_ITERATION=9 — selected WUI-021 (Results browsing + download). Queue updated (moved WUI-021 to Now).
+apply_patch(auto_approved=true) exited 0 in 34ms:
+Success. Updated the following files:
+M .agent/progress.md
+file update:
+diff --git a/.agent/plan.md b/.agent/plan.md
+index 556276083327ef24defea479df685a7e008ca12e..125e7701e7e72155f6e3df01cc816389f205edf4
+--- a/.agent/plan.md
++++ b/.agent/plan.md
+@@ -1,25 +1,23 @@
+ # Plan
+ 
+-Task: WUI-020 — Integrate `wtm` CLI transcription
++Task: WUI-021 — Results browsing + download
+ 
+-Acceptance: for a job, system runs `wtm` with chosen language and produces at least `.txt` in `data/results/<job_id>/`
++Acceptance: history page shows per-job links to view/download TXT and other generated formats
+ 
+ Assumptions:
+-- `wtm` is installed and available on PATH (or a configurable path), and the model has been downloaded.
+-- Tests should not invoke the real ML model; subprocess calls will be mocked.
++- Results live under `data/results/<job_id>/` and are safe to expose via file download routes.
++- Job history already exists and includes job IDs that map to results directories.
+ 
+ Implementation steps:
+-- Inspect the current transcriber interface and worker flow to locate where to swap the fake transcriber for a CLI-backed implementation.
+-- Implement a `wtm`-backed transcriber that builds the CLI command with the selected language and output directory, captures errors, and writes results under `data/results/<job_id>/`.
+-- Ensure the worker uses the new transcriber path and records failures cleanly without breaking the queue.
+-- Add configuration hooks if needed (e.g., optional `WTM_PATH`) and keep logs readable while avoiding secret exposure.
+-- Update tests to mock subprocess execution, create a fake `.txt` result, and assert job status/result paths without running the model.
++- Review current history rendering in `mlx_ui/templates/index.html` and job metadata access in `mlx_ui/app.py` to confirm what fields are available per job.
++- Add a helper to list result files for a job by scanning `data/results/<job_id>/`, filtering non-files, and sorting deterministically.
++- Add a download/view endpoint (e.g., `/results/{job_id}/{filename}`) using `FileResponse`, with path traversal protection and 404 for missing files.
++- Update the History section in the template to show per-job lists of result links (TXT emphasized) and a “no results yet” fallback.
++- Extend tests to create fake result files and assert history renders links and download endpoints return file content.
+ 
+ Files likely to touch:
+-- `mlx_ui/transcriber.py`
+-- `mlx_ui/worker.py`
+ - `mlx_ui/app.py`
+-- `tests/test_worker.py`
++- `mlx_ui/templates/index.html`
+ - `tests/test_app.py`
+ 
+ Verification steps:
+diff --git a/.agent/progress.md b/.agent/progress.md
+index 1c72e6bd59959806310d020ae2d5428a615d032e..700951b1c3663fb44542fc9732894aa47ff274c9
+--- a/.agent/progress.md
++++ b/.agent/progress.md
+@@ -25,3 +25,4 @@
+ - 2026-01-21T12:13:35Z — PLANNER — CODEX_ITERATION=8 — selected WUI-020 (Integrate `wtm` CLI transcription). Queue updated (moved WUI-020 to Now).
+ - 2026-01-21T12:19:43Z — WORKER — CODEX_ITERATION=8 — WUI-020 — tests: passed (make test); lint: passed (make lint)
+ - 2026-01-21T12:24:16Z — JUDGE — CODEX_ITERATION=8 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
++- 2026-01-21T12:29:53Z — PLANNER — CODEX_ITERATION=9 — selected WUI-021 (Results browsing + download). Queue updated (moved WUI-021 to Now).
+diff --git a/.agent/queue.md b/.agent/queue.md
+index 809a7c5b49498b73bc8e6687f06ee2eb4d6e4921..195a75ee033e8d7132e8d2fd35df99cc393e06db
+--- a/.agent/queue.md
++++ b/.agent/queue.md
+@@ -1,11 +1,11 @@
+ # Queue
+ 
+ ## Now
++- [ ] WUI-021 — Results browsing + download (acceptance: history page shows per-job links to view/download TXT and other generated formats)
+ 
+ ## Next
+ 
+ ## Later
+-- [ ] WUI-021 — Results browsing + download (acceptance: history page shows per-job links to view/download TXT and other generated formats)
+ - [ ] WUI-030 — One-command setup & run on M1+ macOS (acceptance: `./scripts/setup_and_run.sh` installs deps, downloads models, starts server, and opens browser)
+ - [ ] WUI-040 — Telegram delivery (acceptance: when env vars are set, send TXT + message; failures do not break pipeline; secrets masked)
+ - [ ] WUI-050 — Update check at startup (acceptance: if online, checks for updates with timeout; if offline, no errors and app works)
+
+file update:
+diff --git a/.agent/plan.md b/.agent/plan.md
+index 556276083327ef24defea479df685a7e008ca12e..125e7701e7e72155f6e3df01cc816389f205edf4
+--- a/.agent/plan.md
++++ b/.agent/plan.md
+@@ -1,25 +1,23 @@
+ # Plan
+ 
+-Task: WUI-020 — Integrate `wtm` CLI transcription
++Task: WUI-021 — Results browsing + download
+ 
+-Acceptance: for a job, system runs `wtm` with chosen language and produces at least `.txt` in `data/results/<job_id>/`
++Acceptance: history page shows per-job links to view/download TXT and other generated formats
+ 
+ Assumptions:
+-- `wtm` is installed and available on PATH (or a configurable path), and the model has been downloaded.
+-- Tests should not invoke the real ML model; subprocess calls will be mocked.
++- Results live under `data/results/<job_id>/` and are safe to expose via file download routes.
++- Job history already exists and includes job IDs that map to results directories.
+ 
+ Implementation steps:
+-- Inspect the current transcriber interface and worker flow to locate where to swap the fake transcriber for a CLI-backed implementation.
+-- Implement a `wtm`-backed transcriber that builds the CLI command with the selected language and output directory, captures errors, and writes results under `data/results/<job_id>/`.
+-- Ensure the worker uses the new transcriber path and records failures cleanly without breaking the queue.
+-- Add configuration hooks if needed (e.g., optional `WTM_PATH`) and keep logs readable while avoiding secret exposure.
+-- Update tests to mock subprocess execution, create a fake `.txt` result, and assert job status/result paths without running the model.
++- Review current history rendering in `mlx_ui/templates/index.html` and job metadata access in `mlx_ui/app.py` to confirm what fields are available per job.
++- Add a helper to list result files for a job by scanning `data/results/<job_id>/`, filtering non-files, and sorting deterministically.
++- Add a download/view endpoint (e.g., `/results/{job_id}/{filename}`) using `FileResponse`, with path traversal protection and 404 for missing files.
++- Update the History section in the template to show per-job lists of result links (TXT emphasized) and a “no results yet” fallback.
++- Extend tests to create fake result files and assert history renders links and download endpoints return file content.
+ 
+ Files likely to touch:
+-- `mlx_ui/transcriber.py`
+-- `mlx_ui/worker.py`
+ - `mlx_ui/app.py`
+-- `tests/test_worker.py`
++- `mlx_ui/templates/index.html`
+ - `tests/test_app.py`
+ 
+ Verification steps:
+diff --git a/.agent/progress.md b/.agent/progress.md
+index 1c72e6bd59959806310d020ae2d5428a615d032e..700951b1c3663fb44542fc9732894aa47ff274c9
+--- a/.agent/progress.md
++++ b/.agent/progress.md
+@@ -25,3 +25,4 @@
+ - 2026-01-21T12:13:35Z — PLANNER — CODEX_ITERATION=8 — selected WUI-020 (Integrate `wtm` CLI transcription). Queue updated (moved WUI-020 to Now).
+ - 2026-01-21T12:19:43Z — WORKER — CODEX_ITERATION=8 — WUI-020 — tests: passed (make test); lint: passed (make lint)
+ - 2026-01-21T12:24:16Z — JUDGE — CODEX_ITERATION=8 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
++- 2026-01-21T12:29:53Z — PLANNER — CODEX_ITERATION=9 — selected WUI-021 (Results browsing + download). Queue updated (moved WUI-021 to Now).
+diff --git a/.agent/queue.md b/.agent/queue.md
+index 809a7c5b49498b73bc8e6687f06ee2eb4d6e4921..195a75ee033e8d7132e8d2fd35df99cc393e06db
+--- a/.agent/queue.md
++++ b/.agent/queue.md
+@@ -1,11 +1,11 @@
+ # Queue
+ 
+ ## Now
++- [ ] WUI-021 — Results browsing + download (acceptance: history page shows per-job links to view/download TXT and other generated formats)
+ 
+ ## Next
+ 
+ ## Later
+-- [ ] WUI-021 — Results browsing + download (acceptance: history page shows per-job links to view/download TXT and other generated formats)
+ - [ ] WUI-030 — One-command setup & run on M1+ macOS (acceptance: `./scripts/setup_and_run.sh` installs deps, downloads models, starts server, and opens browser)
+ - [ ] WUI-040 — Telegram delivery (acceptance: when env vars are set, send TXT + message; failures do not break pipeline; secrets masked)
+ - [ ] WUI-050 — Update check at startup (acceptance: if online, checks for updates with timeout; if offline, no errors and app works)
+
+
+thinking
+**Reviewing state and queue files**
+
+Considering whether to update state or planner files but deciding to keep last_task_id unchanged for now; next, I'll verify the queue file format to ensure consistency.
+exec
+/bin/zsh -lc 'cat .agent/queue.md' in /Users/ivankhokhlov/code/mlx-ui/. succeeded in 57ms:
+# Queue
+
+## Now
+- [ ] WUI-021 — Results browsing + download (acceptance: history page shows per-job links to view/download TXT and other generated formats)
+
+## Next
+
+## Later
+- [ ] WUI-030 — One-command setup & run on M1+ macOS (acceptance: `./scripts/setup_and_run.sh` installs deps, downloads models, starts server, and opens browser)
+- [ ] WUI-040 — Telegram delivery (acceptance: when env vars are set, send TXT + message; failures do not break pipeline; secrets masked)
+- [ ] WUI-050 — Update check at startup (acceptance: if online, checks for updates with timeout; if offline, no errors and app works)
+- [ ] WUI-090 — Live mode skeleton (acceptance: UI has “Live” page stub + technical plan in docs; no implementation yet)
+
+## Done
+- [x] WUI-020 — Integrate `wtm` CLI transcription (acceptance: for a job, system runs `wtm` with chosen language and produces at least `.txt` in `data/results/<job_id>/`)
+- [x] WUI-012 — Sequential worker + fake transcriber (acceptance: single worker processes jobs strictly one-at-a-time; tests do not require ML model)
+- [x] WUI-011 — Persistent job store (SQLite) (acceptance: jobs survive server restart; history page lists prior jobs)
+- [x] WUI-010 — Upload endpoint + local storage (acceptance: user can upload multiple files; files saved under `data/uploads/` and jobs are created)
+- [x] WUI-002 — Minimal WebUI shell (acceptance: localhost page renders with tabs: Queue + History, using server-side templates)
+- [x] WUI-001A — Fix pytest availability for `make test` (acceptance: `make test` succeeds in a clean env by ensuring pytest is installed or Makefile uses Poetry/venv)
+file update:
+diff --git a/.agent/plan.md b/.agent/plan.md
+index 556276083327ef24defea479df685a7e008ca12e..125e7701e7e72155f6e3df01cc816389f205edf4
+--- a/.agent/plan.md
++++ b/.agent/plan.md
+@@ -1,25 +1,23 @@
+ # Plan
+ 
+-Task: WUI-020 — Integrate `wtm` CLI transcription
++Task: WUI-021 — Results browsing + download
+ 
+-Acceptance: for a job, system runs `wtm` with chosen language and produces at least `.txt` in `data/results/<job_id>/`
++Acceptance: history page shows per-job links to view/download TXT and other generated formats
+ 
+ Assumptions:
+-- `wtm` is installed and available on PATH (or a configurable path), and the model has been downloaded.
+-- Tests should not invoke the real ML model; subprocess calls will be mocked.
++- Results live under `data/results/<job_id>/` and are safe to expose via file download routes.
++- Job history already exists and includes job IDs that map to results directories.
+ 
+ Implementation steps:
+-- Inspect the current transcriber interface and worker flow to locate where to swap the fake transcriber for a CLI-backed implementation.
+-- Implement a `wtm`-backed transcriber that builds the CLI command with the selected language and output directory, captures errors, and writes results under `data/results/<job_id>/`.
+-- Ensure the worker uses the new transcriber path and records failures cleanly without breaking the queue.
+-- Add configuration hooks if needed (e.g., optional `WTM_PATH`) and keep logs readable while avoiding secret exposure.
+-- Update tests to mock subprocess execution, create a fake `.txt` result, and assert job status/result paths without running the model.
++- Review current history rendering in `mlx_ui/templates/index.html` and job metadata access in `mlx_ui/app.py` to confirm what fields are available per job.
++- Add a helper to list result files for a job by scanning `data/results/<job_id>/`, filtering non-files, and sorting deterministically.
++- Add a download/view endpoint (e.g., `/results/{job_id}/{filename}`) using `FileResponse`, with path traversal protection and 404 for missing files.
++- Update the History section in the template to show per-job lists of result links (TXT emphasized) and a “no results yet” fallback.
++- Extend tests to create fake result files and assert history renders links and download endpoints return file content.
+ 
+ Files likely to touch:
+-- `mlx_ui/transcriber.py`
+-- `mlx_ui/worker.py`
+ - `mlx_ui/app.py`
+-- `tests/test_worker.py`
++- `mlx_ui/templates/index.html`
+ - `tests/test_app.py`
+ 
+ Verification steps:
+diff --git a/.agent/progress.md b/.agent/progress.md
+index 1c72e6bd59959806310d020ae2d5428a615d032e..700951b1c3663fb44542fc9732894aa47ff274c9
+--- a/.agent/progress.md
++++ b/.agent/progress.md
+@@ -25,3 +25,4 @@
+ - 2026-01-21T12:13:35Z — PLANNER — CODEX_ITERATION=8 — selected WUI-020 (Integrate `wtm` CLI transcription). Queue updated (moved WUI-020 to Now).
+ - 2026-01-21T12:19:43Z — WORKER — CODEX_ITERATION=8 — WUI-020 — tests: passed (make test); lint: passed (make lint)
+ - 2026-01-21T12:24:16Z — JUDGE — CODEX_ITERATION=8 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
++- 2026-01-21T12:29:53Z — PLANNER — CODEX_ITERATION=9 — selected WUI-021 (Results browsing + download). Queue updated (moved WUI-021 to Now).
+diff --git a/.agent/queue.md b/.agent/queue.md
+index 809a7c5b49498b73bc8e6687f06ee2eb4d6e4921..195a75ee033e8d7132e8d2fd35df99cc393e06db
+--- a/.agent/queue.md
++++ b/.agent/queue.md
+@@ -1,11 +1,11 @@
+ # Queue
+ 
+ ## Now
++- [ ] WUI-021 — Results browsing + download (acceptance: history page shows per-job links to view/download TXT and other generated formats)
+ 
+ ## Next
+ 
+ ## Later
+-- [ ] WUI-021 — Results browsing + download (acceptance: history page shows per-job links to view/download TXT and other generated formats)
+ - [ ] WUI-030 — One-command setup & run on M1+ macOS (acceptance: `./scripts/setup_and_run.sh` installs deps, downloads models, starts server, and opens browser)
+ - [ ] WUI-040 — Telegram delivery (acceptance: when env vars are set, send TXT + message; failures do not break pipeline; secrets masked)
+ - [ ] WUI-050 — Update check at startup (acceptance: if online, checks for updates with timeout; if offline, no errors and app works)
+
+
+thinking
+**Confirming required files exist**
+
+The necessary files are already present, so no updates to docs, spec, or dev notes are needed since the structure remains unchanged.
+exec
+/bin/zsh -lc 'cat .agent/plan.md' in /Users/ivankhokhlov/code/mlx-ui/. succeeded in 54ms:
+# Plan
+
+Task: WUI-021 — Results browsing + download
+
+Acceptance: history page shows per-job links to view/download TXT and other generated formats
+
+Assumptions:
+- Results live under `data/results/<job_id>/` and are safe to expose via file download routes.
+- Job history already exists and includes job IDs that map to results directories.
+
+Implementation steps:
+- Review current history rendering in `mlx_ui/templates/index.html` and job metadata access in `mlx_ui/app.py` to confirm what fields are available per job.
+- Add a helper to list result files for a job by scanning `data/results/<job_id>/`, filtering non-files, and sorting deterministically.
+- Add a download/view endpoint (e.g., `/results/{job_id}/{filename}`) using `FileResponse`, with path traversal protection and 404 for missing files.
+- Update the History section in the template to show per-job lists of result links (TXT emphasized) and a “no results yet” fallback.
+- Extend tests to create fake result files and assert history renders links and download endpoints return file content.
+
+Files likely to touch:
+- `mlx_ui/app.py`
+- `mlx_ui/templates/index.html`
+file update:
+diff --git a/.agent/plan.md b/.agent/plan.md
+index 556276083327ef24defea479df685a7e008ca12e..125e7701e7e72155f6e3df01cc816389f205edf4
+--- a/.agent/plan.md
++++ b/.agent/plan.md
+@@ -1,25 +1,23 @@
+ # Plan
+ 
+-Task: WUI-020 — Integrate `wtm` CLI transcription
++Task: WUI-021 — Results browsing + download
+ 
+-Acceptance: for a job, system runs `wtm` with chosen language and produces at least `.txt` in `data/results/<job_id>/`
++Acceptance: history page shows per-job links to view/download TXT and other generated formats
+ 
+ Assumptions:
+-- `wtm` is installed and available on PATH (or a configurable path), and the model has been downloaded.
+-- Tests should not invoke the real ML model; subprocess calls will be mocked.
++- Results live under `data/results/<job_id>/` and are safe to expose via file download routes.
++- Job history already exists and includes job IDs that map to results directories.
+ 
+ Implementation steps:
+-- Inspect the current transcriber interface and worker flow to locate where to swap the fake transcriber for a CLI-backed implementation.
+-- Implement a `wtm`-backed transcriber that builds the CLI command with the selected language and output directory, captures errors, and writes results under `data/results/<job_id>/`.
+-- Ensure the worker uses the new transcriber path and records failures cleanly without breaking the queue.
+-- Add configuration hooks if needed (e.g., optional `WTM_PATH`) and keep logs readable while avoiding secret exposure.
+-- Update tests to mock subprocess execution, create a fake `.txt` result, and assert job status/result paths without running the model.
++- Review current history rendering in `mlx_ui/templates/index.html` and job metadata access in `mlx_ui/app.py` to confirm what fields are available per job.
++- Add a helper to list result files for a job by scanning `data/results/<job_id>/`, filtering non-files, and sorting deterministically.
++- Add a download/view endpoint (e.g., `/results/{job_id}/{filename}`) using `FileResponse`, with path traversal protection and 404 for missing files.
++- Update the History section in the template to show per-job lists of result links (TXT emphasized) and a “no results yet” fallback.
++- Extend tests to create fake result files and assert history renders links and download endpoints return file content.
+ 
+ Files likely to touch:
+-- `mlx_ui/transcriber.py`
+-- `mlx_ui/worker.py`
+ - `mlx_ui/app.py`
+-- `tests/test_worker.py`
++- `mlx_ui/templates/index.html`
+ - `tests/test_app.py`
+ 
+ Verification steps:
+diff --git a/.agent/progress.md b/.agent/progress.md
+index 1c72e6bd59959806310d020ae2d5428a615d032e..700951b1c3663fb44542fc9732894aa47ff274c9
+--- a/.agent/progress.md
++++ b/.agent/progress.md
+@@ -25,3 +25,4 @@
+ - 2026-01-21T12:13:35Z — PLANNER — CODEX_ITERATION=8 — selected WUI-020 (Integrate `wtm` CLI transcription). Queue updated (moved WUI-020 to Now).
+ - 2026-01-21T12:19:43Z — WORKER — CODEX_ITERATION=8 — WUI-020 — tests: passed (make test); lint: passed (make lint)
+ - 2026-01-21T12:24:16Z — JUDGE — CODEX_ITERATION=8 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
++- 2026-01-21T12:29:53Z — PLANNER — CODEX_ITERATION=9 — selected WUI-021 (Results browsing + download). Queue updated (moved WUI-021 to Now).
+diff --git a/.agent/queue.md b/.agent/queue.md
+index 809a7c5b49498b73bc8e6687f06ee2eb4d6e4921..195a75ee033e8d7132e8d2fd35df99cc393e06db
+--- a/.agent/queue.md
++++ b/.agent/queue.md
+@@ -1,11 +1,11 @@
+ # Queue
+ 
+ ## Now
++- [ ] WUI-021 — Results browsing + download (acceptance: history page shows per-job links to view/download TXT and other generated formats)
+ 
+ ## Next
+ 
+ ## Later
+-- [ ] WUI-021 — Results browsing + download (acceptance: history page shows per-job links to view/download TXT and other generated formats)
+ - [ ] WUI-030 — One-command setup & run on M1+ macOS (acceptance: `./scripts/setup_and_run.sh` installs deps, downloads models, starts server, and opens browser)
+ - [ ] WUI-040 — Telegram delivery (acceptance: when env vars are set, send TXT + message; failures do not break pipeline; secrets masked)
+ - [ ] WUI-050 — Update check at startup (acceptance: if online, checks for updates with timeout; if offline, no errors and app works)
+
+
+
+thinking
+**Summarizing task and next steps**
+
+Selected task: WUI-021 — Results browsing + download  
+Files updated: `.agent/queue.md`, `.agent/plan.md`, `.agent/progress.md`  
+Worker next: implement per plan by adding result listing and download endpoints in `mlx_ui/app.py`, updating `mlx_ui/templates/index.html`, adding tests in `tests/test_app.py`, and running `make test` and `make lint`
+thinking
+**Adding queue update to summary**
+
+Selected task: WUI-021 — Results browsing + download  
+Queue updated (moved WUI-021 to Now)  
+Files updated: `.agent/queue.md`, `.agent/plan.md`, `.agent/progress.md`  
+Worker next: implement per plan by adding result listing and download endpoints in `mlx_ui/app.py`, updating `mlx_ui/templates/index.html`, adding tests in `tests/test_app.py`, and running `make test` and `make lint`
+codex
+Selected task: WUI-021 — Results browsing + download.
+
+Updated files: `.agent/queue.md`, `.agent/plan.md`, `.agent/progress.md`.
+
+Worker should now follow `.agent/plan.md`: add per-job result listing + download endpoint in `mlx_ui/app.py`, update `mlx_ui/templates/index.html`, add tests in `tests/test_app.py`, then run `make test` and `make lint`.
+file update:
+diff --git a/.agent/plan.md b/.agent/plan.md
+index 556276083327ef24defea479df685a7e008ca12e..125e7701e7e72155f6e3df01cc816389f205edf4
+--- a/.agent/plan.md
++++ b/.agent/plan.md
+@@ -1,25 +1,23 @@
+ # Plan
+ 
+-Task: WUI-020 — Integrate `wtm` CLI transcription
++Task: WUI-021 — Results browsing + download
+ 
+-Acceptance: for a job, system runs `wtm` with chosen language and produces at least `.txt` in `data/results/<job_id>/`
++Acceptance: history page shows per-job links to view/download TXT and other generated formats
+ 
+ Assumptions:
+-- `wtm` is installed and available on PATH (or a configurable path), and the model has been downloaded.
+-- Tests should not invoke the real ML model; subprocess calls will be mocked.
++- Results live under `data/results/<job_id>/` and are safe to expose via file download routes.
++- Job history already exists and includes job IDs that map to results directories.
+ 
+ Implementation steps:
+-- Inspect the current transcriber interface and worker flow to locate where to swap the fake transcriber for a CLI-backed implementation.
+-- Implement a `wtm`-backed transcriber that builds the CLI command with the selected language and output directory, captures errors, and writes results under `data/results/<job_id>/`.
+-- Ensure the worker uses the new transcriber path and records failures cleanly without breaking the queue.
+-- Add configuration hooks if needed (e.g., optional `WTM_PATH`) and keep logs readable while avoiding secret exposure.
+-- Update tests to mock subprocess execution, create a fake `.txt` result, and assert job status/result paths without running the model.
++- Review current history rendering in `mlx_ui/templates/index.html` and job metadata access in `mlx_ui/app.py` to confirm what fields are available per job.
++- Add a helper to list result files for a job by scanning `data/results/<job_id>/`, filtering non-files, and sorting deterministically.
++- Add a download/view endpoint (e.g., `/results/{job_id}/{filename}`) using `FileResponse`, with path traversal protection and 404 for missing files.
++- Update the History section in the template to show per-job lists of result links (TXT emphasized) and a “no results yet” fallback.
++- Extend tests to create fake result files and assert history renders links and download endpoints return file content.
+ 
+ Files likely to touch:
+-- `mlx_ui/transcriber.py`
+-- `mlx_ui/worker.py`
+ - `mlx_ui/app.py`
+-- `tests/test_worker.py`
++- `mlx_ui/templates/index.html`
+ - `tests/test_app.py`
+ 
+ Verification steps:
+diff --git a/.agent/progress.md b/.agent/progress.md
+index 1c72e6bd59959806310d020ae2d5428a615d032e..700951b1c3663fb44542fc9732894aa47ff274c9
+--- a/.agent/progress.md
++++ b/.agent/progress.md
+@@ -25,3 +25,4 @@
+ - 2026-01-21T12:13:35Z — PLANNER — CODEX_ITERATION=8 — selected WUI-020 (Integrate `wtm` CLI transcription). Queue updated (moved WUI-020 to Now).
+ - 2026-01-21T12:19:43Z — WORKER — CODEX_ITERATION=8 — WUI-020 — tests: passed (make test); lint: passed (make lint)
+ - 2026-01-21T12:24:16Z — JUDGE — CODEX_ITERATION=8 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
++- 2026-01-21T12:29:53Z — PLANNER — CODEX_ITERATION=9 — selected WUI-021 (Results browsing + download). Queue updated (moved WUI-021 to Now).
+diff --git a/.agent/queue.md b/.agent/queue.md
+index 809a7c5b49498b73bc8e6687f06ee2eb4d6e4921..195a75ee033e8d7132e8d2fd35df99cc393e06db
+--- a/.agent/queue.md
++++ b/.agent/queue.md
+@@ -1,11 +1,11 @@
+ # Queue
+ 
+ ## Now
++- [ ] WUI-021 — Results browsing + download (acceptance: history page shows per-job links to view/download TXT and other generated formats)
+ 
+ ## Next
+ 
+ ## Later
+-- [ ] WUI-021 — Results browsing + download (acceptance: history page shows per-job links to view/download TXT and other generated formats)
+ - [ ] WUI-030 — One-command setup & run on M1+ macOS (acceptance: `./scripts/setup_and_run.sh` installs deps, downloads models, starts server, and opens browser)
+ - [ ] WUI-040 — Telegram delivery (acceptance: when env vars are set, send TXT + message; failures do not break pipeline; secrets masked)
+ - [ ] WUI-050 — Update check at startup (acceptance: if online, checks for updates with timeout; if offline, no errors and app works)
+
+tokens used
+22,250
