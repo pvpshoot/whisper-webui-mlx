@@ -1,17 +1,18 @@
 # Plan
 
-Task: WUI-002 — Minimal WebUI shell
-Acceptance: localhost page renders with tabs: Queue + History, using server-side templates
+Task: WUI-010 — Upload endpoint + local storage
+Acceptance: user can upload multiple files; files saved under `data/uploads/` and jobs are created
 
 Assumptions:
-- A simple Jinja2-rendered HTML page with placeholder content satisfies the "shell" requirement.
+- In-memory job records are acceptable until SQLite persistence is added in WUI-011.
+- A simple HTML multipart form on the Queue tab is sufficient for initial upload UX.
 
 Implementation steps:
-- Add Jinja2 template rendering for the root route and pass the request context.
-- Create a minimal HTML template that renders two tabs (Queue, History) with placeholder panels.
-- Keep the layout lightweight and offline-friendly (no external assets).
-- Update the root test to assert an HTML response and presence of "Queue" and "History" text.
-- Update docs tree if a new templates directory is added.
+- Add an uploads base directory (default `data/uploads/`) and ensure it exists on startup or on first upload.
+- Implement a POST upload endpoint that accepts multiple files and writes them to the uploads directory with unique per-job identifiers.
+- Create minimal job records (id, filename, status, created_at, upload_path) stored in memory and returned to the template.
+- Update the Queue panel template to show the upload form and render newly queued jobs.
+- Add tests that upload multiple files via TestClient and assert files are written under `data/uploads/` and jobs are registered.
 - Record test/lint results in `.agent/worker_report.md`.
 
 Files likely to touch:

@@ -1,12 +1,12 @@
 # Worker Report
 
-Task: WUI-002 — Minimal WebUI shell
+Task: WUI-010 — Upload endpoint + local storage
 
 What changed:
-- Rendered the root route with a Jinja2 template instead of JSON.
-- Added a minimal offline-friendly HTML shell with Queue and History tabs.
-- Updated tests to assert HTML content and documented the new templates directory.
-- Added Jinja2 to dependencies and refreshed the lock file.
+- Added uploads directory handling, an in-memory job store, and a multi-file upload endpoint.
+- Rendered the Queue tab with an upload form and queued job list.
+- Added upload tests to verify job creation and file persistence with cleanup.
+- Added python-multipart and documented the data directory in the tree map.
 
 Files changed:
 - mlx_ui/app.py
@@ -17,11 +17,10 @@ Files changed:
 - poetry.lock
 - .agent/worker_report.md
 - .agent/progress.md
-- .agent/logs/test_4.log
-- .agent/logs/lint_4.log
+- .agent/logs/test_5.log
+- .agent/logs/lint_5.log
 
 Commands run + result:
-- `poetry lock --no-update` (pass)
-- `poetry install` (pass)
+- `poetry add python-multipart` (pass)
 - `make test` (pass)
 - `make lint` (pass)

@@ -1,0 +1,9 @@
+Selected task: WUI-010 — Upload endpoint + local storage.
+
+Files updated:
+- `.agent/queue.md`
+- `.agent/plan.md`
+- `.agent/progress.md`
+
+Worker should next:
+- Implement the upload endpoint + local storage + in-memory job creation and update the Queue UI/tests per `.agent/plan.md`, then run `make test` and `make lint` and log results in `.agent/worker_report.md`.

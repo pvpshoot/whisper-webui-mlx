@@ -1,9 +1,10 @@
-- Verdict: PASS
-- Tests: `make test` (pass, rerun)
-- Tests: `make lint` (pass, rerun)
-- Acceptance: WUI-002 met (root renders HTML with Queue/History tabs via Jinja2 template)
-- Queue: WUI-002 moved to Done in `.agent/queue.md`
-- Next task: WUI-010 — Upload endpoint + local storage
-- State: updated `.agent/state.md` (last_task_id=WUI-002, failures=0)
-- Feedback: `.agent/judge_feedback.md`
-- Progress: appended to `.agent/progress.md` (CODEX_ITERATION=4)
+- Verdict: PASS — WUI-010 acceptance met (multi-file upload saves to data/uploads and creates jobs).
+- Tests: `make test` (pass, rerun).
+- Lint: `make lint` (not rerun; worker reported pass).
+- Acceptance check: `/upload` accepts multiple files and job records render in Queue UI.
+- Queue: WUI-010 moved to Done.
+- Next task: WUI-011 — Persistent job store (SQLite).
+- State updated: `.agent/state.md` (last_task_id=WUI-010, failures=0).
+- Feedback: `.agent/judge_feedback.md`.
+- Progress log: `.agent/progress.md` appended (CODEX_ITERATION=5).
+- Commit: `WUI-010: Upload endpoint + local storage`.
