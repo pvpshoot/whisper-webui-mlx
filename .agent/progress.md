@@ -34,3 +34,6 @@
 - 2026-01-21T13:04:26Z — PLANNER — CODEX_ITERATION=11 — selected WUI-040 (Telegram delivery). Queue updated (moved WUI-040 to Now; WUI-050 to Next).
 - 2026-01-21T13:11:11Z — WORKER — CODEX_ITERATION=11 — WUI-040 — tests: passed (make test); lint: passed (make lint)
 - 2026-01-21T13:15:41Z — JUDGE — CODEX_ITERATION=11 — PASS — acceptance met; tests: passed (make test); lint: not rerun (worker reported pass)
+- 2026-01-21T13:23:02Z — PLANNER — CODEX_ITERATION=12 — selected WUI-050 (Update check at startup). Queue updated (moved WUI-050 to Now).
+- 2026-01-21T13:31:52Z — WORKER — CODEX_ITERATION=12 — WUI-050 — tests: passed (make test); lint: passed (make lint)
+- 2026-01-21T13:36:37Z — JUDGE — CODEX_ITERATION=12 — PASS — acceptance met; tests: passed (make test); lint: passed (make lint)

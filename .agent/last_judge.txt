@@ -1,18 +1,13 @@
 **Verdict**
-- PASS — WUI-040 acceptance met (Telegram delivery sends message + .txt; failures do not break pipeline; secrets masked).
-
+- PASS — WUI-050 acceptance met (startup update check runs with timeout; offline failures do not break app).
 **Tests**
 - `make test` passed (rerun).
-- `make lint` not rerun; worker reported pass.
-
+- `make lint` passed (rerun).
 **Queue**
-- Next: WUI-050 — Update check at startup.
-
+- Next: WUI-090 — Live mode skeleton.
 **Commit**
-- `WUI-040: Telegram delivery`.
-
+- `WUI-050: Update check at startup`.
 **Where To Look**
 - `.agent/judge_feedback.md`, `.agent/progress.md`, `.agent/state.md`.
-
 **Repo Status**
-- Untracked `data/` and updated `.agent/logs/`.
+- Dirty: modified `.agent/logs/judge_9.err`, `.agent/logs/judge_9.out`, `.agent/logs/judge_10.err`, `.agent/logs/judge_10.out`, `.agent/logs/judge_11.err`, `.agent/logs/judge_11.out`; untracked `data/`.

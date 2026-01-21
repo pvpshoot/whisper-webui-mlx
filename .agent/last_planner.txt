@@ -1,3 +1,3 @@
-Selected WUI-040 — Telegram delivery and prepared a concrete worker plan; updated the queue to bring it into Now and logged the selection.  
-Files updated: `.agent/queue.md`, `.agent/plan.md`, `.agent/progress.md`.  
-Worker should follow `.agent/plan.md` to add Telegram delivery on successful jobs (masked secrets, best‑effort), add tests, and run `make test` + `make lint`.
+Selected task: WUI-050 - Update check at startup  
+Updated files: `.agent/queue.md`, `.agent/plan.md`, `.agent/progress.md`  
+Worker next: follow `.agent/plan.md` to implement the best-effort startup update check (module + startup hook + tests + doc note), then run `make test` and `make lint`.

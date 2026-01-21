@@ -1,26 +1,25 @@
 # Plan
 
-Task: WUI-040 — Telegram delivery
-Acceptance: when env vars are set, send TXT + message; failures do not break pipeline; secrets masked
+Task: WUI-050 - Update check at startup
+Acceptance: if online, checks for updates with timeout; if offline, no errors and app works
 
 Assumptions:
-- Telegram config is provided via environment variables and can be accessed from the worker process.
-- Each completed job has a deterministic `.txt` result path to attach.
+- Update check can use a GitHub releases endpoint derived from git remote or UPDATE_CHECK_URL override.
+- No UI changes are required beyond logging.
 
 Implementation steps:
-1) Inspect the worker completion flow to find where result paths are available and where to hook delivery.
-2) Add a small config helper to read `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`, plus a masking helper for logs.
-3) Implement Telegram send helper with a short timeout; send a message plus the `.txt` file; catch and log failures without raising.
-4) Call the helper after successful transcription; skip if config missing or `.txt` is absent; ensure pipeline continues.
-5) Add tests with mocked HTTP calls to cover success, missing config (no call), and failure (no exception, masked logs).
-6) Update docs to note the env vars if not already documented.
+1) Add mlx_ui/update_check.py with helpers to resolve the update URL, read the local version, and expose check_for_updates(timeout=...).
+2) Implement check_for_updates to fetch the latest version with a short timeout, compare to local, and log a concise message; swallow all network errors.
+3) Trigger the update check from app startup in a daemon thread; allow disabling via DISABLE_UPDATE_CHECK=1.
+4) Add tests for URL resolution, offline/URLError handling (no exception), and update check logging behavior.
+5) Update docs to mention the update check and env overrides if missing.
 
 Files likely to touch:
-- `mlx_ui/worker.py`
-- `mlx_ui/transcriber.py` or `mlx_ui/app.py`
-- `tests/test_worker.py`
-- `README.md` or `docs/dev.md`
+- mlx_ui/update_check.py
+- mlx_ui/app.py
+- tests/test_update_check.py
+- docs/dev.md or README.md
 
 Verification steps:
-- `make test`
-- `make lint`
+- make test
+- make lint
