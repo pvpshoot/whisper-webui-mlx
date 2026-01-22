@@ -1,8 +1,0 @@
-Added a Live mode stub page and route, linked it from the main UI, and documented the live pipeline plan so the “coming soon” entry point is visible and scoped (`mlx_ui/app.py`, `mlx_ui/templates/index.html`, `mlx_ui/templates/live.html`, `docs/dev.md`, `docs/tree.md`, `tests/test_app.py`).
-
-Tests: passed `make test`; lint: passed `make lint`.
-
-Reports/logs: `.agent/worker_report.md`, `.agent/logs/test_13.log`, `.agent/logs/lint_13.log`.
-
-Next steps:
-1) Run `make run` and visit http://127.0.0.1:8000/live to preview the stub UI.

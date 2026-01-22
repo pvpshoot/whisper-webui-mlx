@@ -1,5 +1,0 @@
-Implemented the minimal FastAPI app and root endpoint test to bootstrap WUI-001, plus Makefile targets and dependency updates. Added `mlx_ui/app.py` and `tests/test_app.py`, declared FastAPI/uvicorn/pytest tooling in `pyproject.toml`, and updated `README.md` and `docs/tree.md` to reflect the new layout.
-
-Tests: `make test` failed (pytest missing in `.venv`), lint not run; log at `.agent/logs/test_1.log`. Worker report is in `.agent/worker_report.md`, and the failure is recorded in `.agent/BLOCKED.md`.
-
-Next step: install dev deps (e.g., `poetry install`) and rerun `make test` then `make lint`.

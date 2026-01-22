@@ -1,8 +1,0 @@
-Added result file indexing and a safe `/results/{job_id}/{filename}` endpoint, and wired History to show per‑job result links with view/download actions. In `mlx_ui/app.py` the results list is built per job and the download route guards against path traversal; in `mlx_ui/templates/index.html` the History panel renders result lists with TXT emphasis; in `tests/test_app.py` a new test seeds results and asserts link rendering plus file delivery.
-
-Tests: `make test` (pass), `make lint` (pass).  
-Logs: `.agent/logs/test_9.log`, `.agent/logs/lint_9.log`.  
-Report: `.agent/worker_report.md`.
-
-Next steps:
-1. `make run` and click History to verify links open/download as expected.

@@ -1,9 +1,0 @@
-Implemented a single background worker that atomically claims queued jobs and writes deterministic fake transcripts so processing stays strictly sequential and offline by default.
-- Added atomic claim/update helpers in `mlx_ui/db.py` and a fake transcriber in `mlx_ui/transcriber.py`, wired into the loop in `mlx_ui/worker.py`.
-- Started the worker on app startup with a test opt‑out in `mlx_ui/app.py`, and disabled it in `tests/test_app.py` to keep queued-status assertions stable.
-- Added sequential worker coverage in `tests/test_worker.py` and updated `docs/tree.md`.
-
-Tests: `make test` (pass; log `.agent/logs/test_7.log`), `make lint` (pass; log `.agent/logs/lint_7.log`).
-Worker report: `.agent/worker_report.md`.
-
-Next step: run `make run` and upload a couple files to see results under `data/results/<job_id>/result.txt`.

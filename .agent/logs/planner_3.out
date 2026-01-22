@@ -1,5 +1,0 @@
-Set the next planner cycle to WUI-001 and recorded the plan/progress entries to drive the worker run.
-
-- Selected task: WUI-001 — Bootstrap repo skeleton
-- Updated files: `.agent/plan.md`, `.agent/progress.md`
-- Worker next: verify the minimal FastAPI app/tests and harness docs meet acceptance, make any minimal adjustments if needed, then run `make test` and `make lint` and log results in `.agent/worker_report.md`

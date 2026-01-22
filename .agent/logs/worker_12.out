@@ -1,5 +1,0 @@
-Added a best-effort startup update check with timeout and concise logging, running in a daemon thread and opt‑out via `DISABLE_UPDATE_CHECK=1`. The helper in `mlx_ui/update_check.py` resolves the update URL (env override or GitHub remote), reads the local version, and compares against the latest release; `mlx_ui/app.py` wires it into startup (tests can disable via `app.state.update_check_enabled`), new tests cover URL resolution/offline handling/logging, and `docs/dev.md` documents the env overrides.
-
-- Tests: `make test` (pass) — `.agent/logs/test_12.log`
-- Lint: `make lint` (pass) — `.agent/logs/lint_12.log`
-- Worker report: `.agent/worker_report.md`

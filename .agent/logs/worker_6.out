@@ -1,4 +1,0 @@
-Added a SQLite-backed job store so queued jobs persist across restarts and render in both Queue and History; DB helpers live in `mlx_ui/db.py` with wiring/template/test updates in `mlx_ui/app.py`, `mlx_ui/templates/index.html`, `tests/test_app.py`, and the tree map in `docs/tree.md`.
-Tests: `make test` (pass), `make lint` (pass).
-Reports/logs: `.agent/worker_report.md`, `.agent/logs/test_6.log`, `.agent/logs/lint_6.log`.
-Next step: run `make run` and confirm Queue/History show persisted jobs after restarting the server.

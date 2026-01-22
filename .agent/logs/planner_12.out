@@ -1,3 +1,0 @@
-Selected task: WUI-050 - Update check at startup  
-Updated files: `.agent/queue.md`, `.agent/plan.md`, `.agent/progress.md`  
-Worker next: follow `.agent/plan.md` to implement the best-effort startup update check (module + startup hook + tests + doc note), then run `make test` and `make lint`.

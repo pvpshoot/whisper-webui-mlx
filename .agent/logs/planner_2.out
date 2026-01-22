@@ -1,5 +1,0 @@
-Selected task: WUI-001A — Fix pytest availability for `make test`.
-
-Updated files: `.agent/queue.md`, `.agent/plan.md`, `.agent/progress.md`.
-
-Worker should next: follow `.agent/plan.md` to make pytest available (via Poetry/venv or Makefile), then run `make test` and `make lint`, and record outputs in `.agent/worker_report.md`.

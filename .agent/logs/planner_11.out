@@ -1,3 +1,0 @@
-Selected WUI-040 — Telegram delivery and prepared a concrete worker plan; updated the queue to bring it into Now and logged the selection.  
-Files updated: `.agent/queue.md`, `.agent/plan.md`, `.agent/progress.md`.  
-Worker should follow `.agent/plan.md` to add Telegram delivery on successful jobs (masked secrets, best‑effort), add tests, and run `make test` + `make lint`.
